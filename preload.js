@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, shell } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
     translate: (data) => ipcRenderer.invoke('translate', data),
@@ -13,5 +13,5 @@ contextBridge.exposeInMainWorld('api', {
     windowClose: () => ipcRenderer.send('window-close'),
     unregisterHotkey: () => ipcRenderer.send('unregister-hotkey'),
     registerHotkey: () => ipcRenderer.send('register-hotkey'),
-    openExternal: (url) => shell.openExternal(url)
+    openExternal: (url) => ipcRenderer.send('open-external', url)
 });

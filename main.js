@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, dialog } = require('electron');
+const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -238,6 +238,9 @@ function setupIPC() {
   // Управление хоткеями
   ipcMain.on('unregister-hotkey', () => globalShortcut.unregisterAll());
   ipcMain.on('register-hotkey', () => registerHotkey());
+
+  // Открытие ссылок в браузере
+  ipcMain.on('open-external', (event, url) => shell.openExternal(url));
 }
 
 function updateRecentLanguages(source, target) {
