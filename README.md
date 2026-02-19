@@ -33,7 +33,7 @@
 <div align="center">
 
 | Main Interface |
-|:---:|:---:|
+|:---:|
 | <img src="assets/screenshot.jpg" width="400" alt="Main Interface"> |
 
 </div>
