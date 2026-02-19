@@ -50,7 +50,7 @@
 1. **Clone the repository:**
 
 ```bash
-git clone https://github.com/your-username/ai-translator.git
+git clone https://github.com/pablosensei/ai-translator.git
 cd ai-translator
 ```
 
