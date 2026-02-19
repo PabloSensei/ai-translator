@@ -32,9 +32,9 @@
 
 <div align="center">
 
-| Main Interface | Style Selection |
+| Main Interface |
 |:---:|:---:|
-| <img src="assets/screenshot.jpg" width="400" alt="Main Interface"> | *Formal / Neutral / Casual* |
+| <img src="assets/screenshot.jpg" width="400" alt="Main Interface"> |
 
 </div>
 
