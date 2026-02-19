@@ -158,6 +158,17 @@ function updateLangDisplay() {
     targetLangDropdown.querySelectorAll('.lang-option').forEach(opt => {
         opt.classList.toggle('selected', opt.dataset.code === currentTargetLang);
     });
+
+    const isSameLang = currentSourceLang === currentTargetLang;
+    if (!isTranslating) {
+        translateBtn.querySelector('.translate-btn-text').textContent = isSameLang ? 'Fix Errors' : 'Translate';
+    }
+
+    // Обновить плейсхолдер если он есть
+    const placeholder = targetText.querySelector('.placeholder');
+    if (placeholder && !isTranslating) {
+        placeholder.textContent = isSameLang ? 'Corrected text will appear here...' : 'Translation will appear here...';
+    }
 }
 
 // ===== Dropdown открытие/закрытие =====
@@ -217,7 +228,8 @@ swapBtn.addEventListener('click', () => {
 
     if (currentTarget && !placeholder) {
         sourceText.value = currentTarget;
-        targetText.innerHTML = tempText || '<span class="placeholder">Translation will appear here...</span>';
+        const isSameLang = currentSourceLang === currentTargetLang;
+        targetText.innerHTML = tempText || `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
     }
 });
 
@@ -282,11 +294,15 @@ async function doTranslate() {
     const text = sourceText.value.trim();
     if (!text || isTranslating) return;
 
+    const isSameLang = currentSourceLang === currentTargetLang;
+    const actionText = isSameLang ? 'Fixing...' : 'Translating...';
+    const btnText = isSameLang ? 'Fix Errors' : 'Translate';
+
     isTranslating = true;
     translateBtn.disabled = true;
-    translateBtn.querySelector('.translate-btn-text').textContent = 'Translating...';
+    translateBtn.querySelector('.translate-btn-text').textContent = actionText;
     loader.style.display = 'flex';
-    targetText.innerHTML = '<span class="placeholder">Translating...</span>';
+    targetText.innerHTML = `<span class="placeholder">${actionText}</span>`;
 
     try {
         const sourceLang = LANGUAGES.find(l => l.code === currentSourceLang)?.name || currentSourceLang;
@@ -306,18 +322,18 @@ async function doTranslate() {
             const recent = await window.api.getRecentLanguages();
             renderRecentLanguages(recent);
 
-            showToast('Translation successful', 'success');
+            showToast(isSameLang ? 'Text fixed successfully' : 'Translation successful', 'success');
         } else {
             targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">${result.error}</span>`;
             showToast(result.error, 'error');
         }
     } catch (err) {
         targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">Error: ${err.message}</span>`;
-        showToast('Translation error', 'error');
+        showToast(isSameLang ? 'Fixing error' : 'Translation error', 'error');
     } finally {
         isTranslating = false;
         translateBtn.disabled = false;
-        translateBtn.querySelector('.translate-btn-text').textContent = 'Translate';
+        translateBtn.querySelector('.translate-btn-text').textContent = btnText;
         loader.style.display = 'none';
     }
 }
@@ -325,7 +341,8 @@ async function doTranslate() {
 // ===== Действия с текстом =====
 $('#btn-clear').addEventListener('click', () => {
     sourceText.value = '';
-    targetText.innerHTML = '<span class="placeholder">Translation will appear here...</span>';
+    const isSameLang = currentSourceLang === currentTargetLang;
+    targetText.innerHTML = `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
     sourceText.focus();
 });
 

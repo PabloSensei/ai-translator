@@ -19,6 +19,7 @@
 ## 🌟 Features
 
 - 🌍 **30+ Languages** — supports translation between English, Russian, German, French, Spanish, Ukrainian, Chinese, Japanese, Korean, Arabic, and many other languages
+- 🛠️ **Grammar & Style Fixer** — select the same source and target language to fix errors and rewrite text in a chosen style
 - 🎨 **Three Translation Styles** — choose between formal, neutral, and casual tones
 - ⚡ **Instant Translation** — use `Ctrl+Enter` or the "Translate" button
 - 🔥 **Google Gemini 2.5 Flash** — the fastest model for accurate translations
@@ -86,6 +87,12 @@ Switch translation style with one click:
 | 💼 **Formal** | Business, professional tone | *"Dear colleagues, we are pleased to inform you..."* |
 | 😊 **Neutral** | Standard translation | *"We are happy to announce..."* |
 | 💬 **Casual** | Informal, friendly | *"Hey! Just wanted to let you know..."* |
+
+### Grammar & Style Correction
+If you select the same language for both source and target (e.g., English → English):
+- The app enters **"Fix Errors"** mode rather than translating.
+- It will automatically correct spelling, grammar, and punctuation.
+- If a specific style (Formal/Casual) is selected, the text will also be rewritten to perfectly match that tone.
 
 ### Global Hotkey
 - Default: `Ctrl+Shift+T`

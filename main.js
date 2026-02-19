@@ -146,7 +146,12 @@ async function translateText(text, sourceLang, targetLang, apiKey, style = 'neut
     styleInstruction = ' Use a casual, conversational, and friendly tone. Prefer everyday vocabulary, natural speech patterns, colloquial expressions, and informal phrasing as if chatting with a friend.';
   }
 
-  const prompt = `Translate the following text from ${sourceLang} to ${targetLang}.${styleInstruction} Return ONLY the translated text, nothing else — no explanations, no quotes, no formatting.\n\nText:\n${text}`;
+  let prompt;
+  if (sourceLang === targetLang) {
+    prompt = `Correct any spelling, grammar, and punctuation errors in the following ${sourceLang} text.${styleInstruction} Return ONLY the corrected text, nothing else — no explanations, no quotes, no formatting.\n\nText:\n${text}`;
+  } else {
+    prompt = `Translate the following text from ${sourceLang} to ${targetLang}.${styleInstruction} Return ONLY the translated text, nothing else — no explanations, no quotes, no formatting.\n\nText:\n${text}`;
+  }
 
   const result = await model.generateContent(prompt);
   const response = result.response;
