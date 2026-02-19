@@ -148,9 +148,3 @@ This project is available for **non-commercial use only**. You may freely use, c
 Details are in the [LICENSE](LICENSE) file.
 
 ---
-
-<div align="center">
-
-**Made with ✦ and Google Gemini AI**
-
-</div>
