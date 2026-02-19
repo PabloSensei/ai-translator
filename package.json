@@ -4,7 +4,19 @@
   "description": "Desktop translator powered by Google Gemini AI with 30+ languages and multiple translation styles",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.ai.translator",
+    "productName": "AI Translator",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.png"
+    }
   },
   "keywords": [
     "translator",
@@ -18,7 +30,10 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "electron": "^40.6.0",
     "electron-store": "^11.0.2"
+  },
+  "devDependencies": {
+    "electron": "^40.6.0",
+    "electron-builder": "^26.8.1"
   }
 }
