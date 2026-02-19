@@ -15,7 +15,7 @@
     "google-ai"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "electron": "^40.6.0",

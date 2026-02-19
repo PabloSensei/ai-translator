@@ -8,7 +8,7 @@
 
 [![Electron](https://img.shields.io/badge/Electron-40-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Gemini AI](https://img.shields.io/badge/Gemini_AI-2.5_Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-A855F7)](LICENSE)
+[![License: Non-Commercial](https://img.shields.io/badge/License-Non--Commercial-A855F7)](LICENSE)
 
 </div>
 
@@ -139,7 +139,11 @@ ai-translator/
 
 ## 📄 Лицензия
 
-Этот проект распространяется под лицензией MIT. Подробности в файле [LICENSE](LICENSE).
+Этот проект доступен **только для некоммерческого использования**. Вы можете свободно использовать, копировать и модифицировать код в личных, образовательных и некоммерческих целях.
+
+**Для коммерческого использования** — свяжитесь с автором: [GitHub](https://github.com/pablosensei).
+
+Подробности в файле [LICENSE](LICENSE).
 
 ---
 
