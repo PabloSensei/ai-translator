@@ -1,0 +1,24 @@
+{
+  "name": "ai-translator",
+  "version": "1.0.0",
+  "description": "Desktop translator powered by Google Gemini AI with 30+ languages and multiple translation styles",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [
+    "translator",
+    "gemini",
+    "ai",
+    "electron",
+    "desktop",
+    "google-ai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "electron": "^40.6.0",
+    "electron-store": "^11.0.2"
+  }
+}

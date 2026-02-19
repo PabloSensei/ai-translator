@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gemini Translator</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Titlebar -->
+  <div class="titlebar" id="titlebar">
+    <div class="titlebar-drag">
+      <span class="titlebar-icon">✦</span>
+      <span class="titlebar-title">Gemini Translator</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btn-settings" title="Настройки">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+        </svg>
+      </button>
+      <button class="titlebar-btn" id="btn-history" title="История">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12 6 12 12 16 14" />
+        </svg>
+      </button>
+      <button class="titlebar-btn minimize" id="btn-minimize" title="Свернуть">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+      <button class="titlebar-btn close" id="btn-close" title="Скрыть в трей">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-container">
+    <!-- Translation View -->
+    <div class="view active" id="view-translate">
+      <!-- Language Bar -->
+      <div class="lang-bar">
+        <div class="lang-selector">
+          <button class="lang-btn" id="source-lang-btn">
+            <span class="lang-code" id="source-lang-label">English</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <div class="lang-dropdown" id="source-lang-dropdown"></div>
+        </div>
+
+        <button class="swap-btn" id="swap-btn" title="Поменять языки местами">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="17 1 21 5 17 9" />
+            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+            <polyline points="7 23 3 19 7 15" />
+            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+          </svg>
+        </button>
+
+        <div class="lang-selector">
+          <button class="lang-btn" id="target-lang-btn">
+            <span class="lang-code" id="target-lang-label">Русский</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          <div class="lang-dropdown" id="target-lang-dropdown"></div>
+        </div>
+      </div>
+
+      <!-- Recent Languages -->
+      <div class="recent-langs" id="recent-langs"></div>
+
+      <!-- Translation Style Selector -->
+      <div class="style-selector" id="style-selector">
+        <button class="style-btn" data-style="formal" title="Деловой, официальный тон">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z" />
+            <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+          </svg>
+          <span>Официальный</span>
+        </button>
+        <button class="style-btn active" data-style="neutral" title="Обычный, нейтральный стиль">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+            <line x1="9" y1="9" x2="9.01" y2="9" />
+            <line x1="15" y1="9" x2="15.01" y2="9" />
+          </svg>
+          <span>Нейтральный</span>
+        </button>
+        <button class="style-btn" data-style="casual" title="Непринуждённый, разговорный стиль">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <span>Разговорный</span>
+        </button>
+      </div>
+
+      <!-- Translation Areas -->
+      <div class="translation-areas">
+        <div class="text-area-wrapper source">
+          <textarea id="source-text" placeholder="Введите текст для перевода..." spellcheck="false"></textarea>
+          <div class="text-area-actions">
+            <button class="action-btn" id="btn-clear" title="Очистить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <button class="action-btn" id="btn-paste" title="Вставить">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="text-area-wrapper target">
+          <div class="target-text" id="target-text">
+            <span class="placeholder">Перевод появится здесь...</span>
+          </div>
+          <div class="text-area-actions">
+            <button class="action-btn" id="btn-copy" title="Копировать перевод">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Translate Button -->
+      <button class="translate-btn" id="btn-translate">
+        <span class="translate-btn-text">Перевести</span>
+        <div class="translate-btn-loader" id="loader" style="display:none;">
+          <div class="spinner"></div>
+        </div>
+      </button>
+    </div>
+
+    <!-- History View -->
+    <div class="view" id="view-history">
+      <div class="view-header">
+        <h2>История переводов</h2>
+        <button class="header-action-btn" id="btn-clear-history">Очистить всё</button>
+      </div>
+      <div class="history-list" id="history-list">
+        <div class="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
+            opacity="0.3">
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </svg>
+          <p>История пуста</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings View -->
+    <div class="view" id="view-settings">
+      <div class="view-header">
+        <h2>Настройки</h2>
+      </div>
+      <div class="settings-form">
+        <div class="setting-group">
+          <label for="api-key-input">API-ключ Google Gemini</label>
+          <p class="setting-hint">Получите ключ на <a href="#" id="link-aistudio">aistudio.google.com</a></p>
+          <div class="input-wrapper">
+            <input type="password" id="api-key-input" placeholder="Введите API-ключ...">
+            <button class="toggle-visibility" id="toggle-api-key">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="setting-group">
+          <label for="hotkey-input">Глобальный хоткей</label>
+          <p class="setting-hint">Комбинация клавиш для показа/скрытия окна</p>
+          <input type="text" id="hotkey-input" placeholder="Ctrl+Shift+T" readonly>
+        </div>
+        <button class="save-btn" id="btn-save-settings">Сохранить настройки</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+
+</html>
