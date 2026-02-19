@@ -43,6 +43,7 @@ let currentSourceLang = 'en';
 let currentTargetLang = 'ru';
 let currentStyle = 'neutral'; // 'formal' | 'neutral' | 'casual'
 let isTranslating = false;
+let currentHotkey = 'Ctrl+Shift+T';
 
 // ===== DOM элементы =====
 const $ = (sel) => document.querySelector(sel);
@@ -71,7 +72,12 @@ async function init() {
     }
 
     if (settings.hotkey) {
+        currentHotkey = settings.hotkey;
         $('#hotkey-input').value = settings.hotkey;
+    }
+
+    if (settings.model) {
+        $('#model-select').value = settings.model;
     }
 
     // Создать выпадающие списки языков
@@ -458,10 +464,26 @@ $('#toggle-api-key').addEventListener('click', () => {
 $('#hotkey-input').addEventListener('click', function () {
     this.value = 'Press a key combination...';
     this.removeAttribute('readonly');
+    window.api.unregisterHotkey();
+});
+
+$('#hotkey-input').addEventListener('blur', function () {
+    if (this.value === 'Press a key combination...') {
+        this.value = currentHotkey;
+    }
+    this.setAttribute('readonly', true);
+    window.api.registerHotkey();
 });
 
 $('#hotkey-input').addEventListener('keydown', function (e) {
     e.preventDefault();
+
+    if (e.key === 'Escape') {
+        this.value = currentHotkey;
+        this.blur();
+        return;
+    }
+
     const parts = [];
     if (e.ctrlKey) parts.push('Ctrl');
     if (e.altKey) parts.push('Alt');
@@ -469,22 +491,34 @@ $('#hotkey-input').addEventListener('keydown', function (e) {
 
     const key = e.key;
     if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
-        parts.push(key.length === 1 ? key.toUpperCase() : key);
-    }
+        let keyName = key.length === 1 ? key.toUpperCase() : key;
+        if (keyName === ' ') keyName = 'Space';
+        parts.push(keyName);
 
-    if (parts.length > 1) {
-        this.value = parts.join('+');
-        this.setAttribute('readonly', true);
+        if (parts.length > 1) {
+            this.value = parts.join('+');
+            this.setAttribute('readonly', true);
+            this.blur();
+        }
+    } else {
+        if (parts.length > 0) {
+            this.value = parts.join('+') + '+...';
+        }
     }
 });
 
 $('#btn-save-settings').addEventListener('click', async () => {
     const apiKey = $('#api-key-input').value.trim();
     const hotkey = $('#hotkey-input').value.trim();
+    const model = $('#model-select').value;
 
     const settings = {};
     if (apiKey) settings.apiKey = apiKey;
-    if (hotkey && hotkey !== 'Press a key combination...') settings.hotkey = hotkey;
+    if (hotkey && hotkey !== 'Press a key combination...') {
+        settings.hotkey = hotkey;
+        currentHotkey = hotkey;
+    }
+    if (model) settings.model = model;
 
     const result = await window.api.saveSettings(settings);
     if (result.success) {

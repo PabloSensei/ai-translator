@@ -738,7 +738,8 @@ a:hover {
     align-items: center;
 }
 
-.setting-group input {
+.setting-group input,
+.setting-group select {
     width: 100%;
     padding: 12px 16px;
     background: var(--bg-input);
@@ -751,9 +752,15 @@ a:hover {
     transition: var(--transition);
 }
 
-.setting-group input:focus {
+.setting-group input:focus,
+.setting-group select:focus {
     border-color: var(--border-focus);
     box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.setting-group select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
 }
 
 .setting-group input::placeholder {

@@ -180,6 +180,15 @@
       </div>
       <div class="settings-form">
         <div class="setting-group">
+          <label for="model-select">Google LLM Model</label>
+          <p class="setting-hint">Select the generative model to use</p>
+          <select id="model-select" class="setting-select">
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="gemini-3.0-flash">Gemini 3 Flash</option>
+            <option value="gemini-3.0-pro">Gemini 3 Pro</option>
+          </select>
+        </div>
+        <div class="setting-group">
           <label for="api-key-input">Google Gemini API Key</label>
           <p class="setting-hint">Get an API key at <a href="#" id="link-aistudio">aistudio.google.com</a></p>
           <div class="input-wrapper">

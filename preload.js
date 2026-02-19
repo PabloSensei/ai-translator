@@ -11,5 +11,7 @@ contextBridge.exposeInMainWorld('api', {
 
     windowMinimize: () => ipcRenderer.send('window-minimize'),
     windowClose: () => ipcRenderer.send('window-close'),
+    unregisterHotkey: () => ipcRenderer.send('unregister-hotkey'),
+    registerHotkey: () => ipcRenderer.send('register-hotkey'),
     openExternal: (url) => shell.openExternal(url)
 });

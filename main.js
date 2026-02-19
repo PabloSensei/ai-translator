@@ -17,7 +17,8 @@ async function initStores() {
       apiKey: '',
       hotkey: 'Ctrl+Shift+T',
       windowBounds: { width: 860, height: 640 },
-      recentLanguages: ['en', 'ru', 'de', 'fr', 'es', 'uk', 'zh', 'ja', 'ko', 'ar']
+      recentLanguages: ['en', 'ru', 'de', 'fr', 'es', 'uk', 'zh', 'ja', 'ko', 'ar'],
+      model: 'gemini-2.5-flash'
     }
   });
 
@@ -115,23 +116,28 @@ function registerHotkey() {
 
   globalShortcut.unregisterAll();
 
-  const success = globalShortcut.register(hotkey, () => {
-    toggleWindow();
-  });
+  try {
+    const success = globalShortcut.register(hotkey, () => {
+      toggleWindow();
+    });
 
-  if (!success) {
-    console.error(`Failed to register hotkey: ${hotkey}`);
+    if (!success) {
+      console.error(`Failed to register hotkey: ${hotkey}`);
+    }
+  } catch (err) {
+    console.error(`Error registering hotkey ${hotkey}:`, err.message);
+    // Optionally register a default hotkey or ignore
   }
 }
 
 // --- Gemini API ---
-async function translateText(text, sourceLang, targetLang, apiKey, style = 'neutral') {
+async function translateText(text, sourceLang, targetLang, apiKey, style = 'neutral', modelName = 'gemini-2.5-flash') {
   if (!apiKey) {
     throw new Error('API key is not set. Please enter it in the settings.');
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+  const model = genAI.getGenerativeModel({ model: modelName });
 
   let styleInstruction = '';
   if (style === 'formal') {
@@ -153,7 +159,8 @@ function setupIPC() {
   ipcMain.handle('translate', async (event, { text, sourceLang, targetLang, style }) => {
     try {
       const apiKey = settingsStore.get('apiKey');
-      const translated = await translateText(text, sourceLang, targetLang, apiKey, style);
+      const modelName = settingsStore.get('model') || 'gemini-2.5-flash';
+      const translated = await translateText(text, sourceLang, targetLang, apiKey, style, modelName);
 
       // Сохранить в историю
       const items = historyStore.get('items') || [];
@@ -183,12 +190,14 @@ function setupIPC() {
     return {
       apiKey: settingsStore.get('apiKey'),
       hotkey: settingsStore.get('hotkey'),
-      recentLanguages: settingsStore.get('recentLanguages')
+      recentLanguages: settingsStore.get('recentLanguages'),
+      model: settingsStore.get('model') || 'gemini-2.5-flash'
     };
   });
 
   ipcMain.handle('save-settings', (event, settings) => {
     if (settings.apiKey !== undefined) settingsStore.set('apiKey', settings.apiKey);
+    if (settings.model !== undefined) settingsStore.set('model', settings.model);
     if (settings.hotkey !== undefined) {
       settingsStore.set('hotkey', settings.hotkey);
       registerHotkey();
@@ -220,6 +229,10 @@ function setupIPC() {
   // Управление окном
   ipcMain.on('window-minimize', () => mainWindow.minimize());
   ipcMain.on('window-close', () => mainWindow.hide());
+
+  // Управление хоткеями
+  ipcMain.on('unregister-hotkey', () => globalShortcut.unregisterAll());
+  ipcMain.on('register-hotkey', () => registerHotkey());
 }
 
 function updateRecentLanguages(source, target) {
