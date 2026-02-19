@@ -93,12 +93,11 @@ a:hover {
     padding-left: 8px;
 }
 
-.titlebar-icon {
-    font-size: 16px;
-    background: linear-gradient(135deg, var(--accent), var(--purple));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+.titlebar-icon-img {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    -webkit-user-drag: none;
 }
 
 .titlebar-title {

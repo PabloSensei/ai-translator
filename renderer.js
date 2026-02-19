@@ -1,7 +1,7 @@
 // ===== Список языков =====
 const LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇬🇧' },
-    { code: 'ru', name: 'Русский', flag: '🇷🇺' },
+    { code: 'ru', name: 'Russian', flag: '🇷🇺' },
     { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
     { code: 'fr', name: 'Français', flag: '🇫🇷' },
     { code: 'es', name: 'Español', flag: '🇪🇸' },
@@ -100,7 +100,7 @@ function buildDropdown(container, type) {
     searchWrap.className = 'lang-dropdown-search';
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
-    searchInput.placeholder = 'Поиск языка...';
+    searchInput.placeholder = 'Search language...';
     searchInput.addEventListener('input', (e) => {
         filterDropdown(container, e.target.value);
     });
@@ -211,7 +211,7 @@ swapBtn.addEventListener('click', () => {
 
     if (currentTarget && !placeholder) {
         sourceText.value = currentTarget;
-        targetText.innerHTML = tempText || '<span class="placeholder">Перевод появится здесь...</span>';
+        targetText.innerHTML = tempText || '<span class="placeholder">Translation will appear here...</span>';
     }
 });
 
@@ -278,9 +278,9 @@ async function doTranslate() {
 
     isTranslating = true;
     translateBtn.disabled = true;
-    translateBtn.querySelector('.translate-btn-text').textContent = 'Переводим...';
+    translateBtn.querySelector('.translate-btn-text').textContent = 'Translating...';
     loader.style.display = 'flex';
-    targetText.innerHTML = '<span class="placeholder">Переводим...</span>';
+    targetText.innerHTML = '<span class="placeholder">Translating...</span>';
 
     try {
         const sourceLang = LANGUAGES.find(l => l.code === currentSourceLang)?.name || currentSourceLang;
@@ -300,18 +300,18 @@ async function doTranslate() {
             const recent = await window.api.getRecentLanguages();
             renderRecentLanguages(recent);
 
-            showToast('Перевод выполнен', 'success');
+            showToast('Translation successful', 'success');
         } else {
             targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">${result.error}</span>`;
             showToast(result.error, 'error');
         }
     } catch (err) {
-        targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">Ошибка: ${err.message}</span>`;
-        showToast('Ошибка перевода', 'error');
+        targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">Error: ${err.message}</span>`;
+        showToast('Translation error', 'error');
     } finally {
         isTranslating = false;
         translateBtn.disabled = false;
-        translateBtn.querySelector('.translate-btn-text').textContent = 'Перевести';
+        translateBtn.querySelector('.translate-btn-text').textContent = 'Translate';
         loader.style.display = 'none';
     }
 }
@@ -319,7 +319,7 @@ async function doTranslate() {
 // ===== Действия с текстом =====
 $('#btn-clear').addEventListener('click', () => {
     sourceText.value = '';
-    targetText.innerHTML = '<span class="placeholder">Перевод появится здесь...</span>';
+    targetText.innerHTML = '<span class="placeholder">Translation will appear here...</span>';
     sourceText.focus();
 });
 
@@ -329,7 +329,7 @@ $('#btn-paste').addEventListener('click', async () => {
         sourceText.value = text;
         sourceText.focus();
     } catch (e) {
-        showToast('Не удалось вставить текст', 'error');
+        showToast('Failed to paste text', 'error');
     }
 });
 
@@ -338,9 +338,9 @@ $('#btn-copy').addEventListener('click', async () => {
     if (placeholder) return;
     try {
         await navigator.clipboard.writeText(targetText.textContent);
-        showToast('Скопировано!', 'success');
+        showToast('Copied!', 'success');
     } catch (e) {
-        showToast('Ошибка копирования', 'error');
+        showToast('Copy error', 'error');
     }
 });
 
@@ -378,7 +378,7 @@ async function loadHistory() {
         container.innerHTML = `
       <div class="empty-state">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <p>История пуста</p>
+        <p>History is empty</p>
       </div>`;
         return;
     }
@@ -390,7 +390,7 @@ async function loadHistory() {
         el.className = 'history-item';
 
         const time = new Date(item.timestamp);
-        const timeStr = time.toLocaleString('ru-RU', {
+        const timeStr = time.toLocaleString('en-US', {
             day: '2-digit', month: '2-digit', year: 'numeric',
             hour: '2-digit', minute: '2-digit'
         });
@@ -406,7 +406,7 @@ async function loadHistory() {
       </div>
       <div class="history-item-source">${escapeHtml(item.sourceText)}</div>
       <div class="history-item-target">${escapeHtml(item.targetText)}</div>
-      <button class="history-item-delete" title="Удалить">
+      <button class="history-item-delete" title="Delete">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     `;
@@ -446,7 +446,7 @@ async function loadHistory() {
 $('#btn-clear-history').addEventListener('click', async () => {
     await window.api.clearHistory();
     loadHistory();
-    showToast('История очищена', 'info');
+    showToast('History cleared', 'info');
 });
 
 // ===== Настройки =====
@@ -456,7 +456,7 @@ $('#toggle-api-key').addEventListener('click', () => {
 });
 
 $('#hotkey-input').addEventListener('click', function () {
-    this.value = 'Нажмите комбинацию клавиш...';
+    this.value = 'Press a key combination...';
     this.removeAttribute('readonly');
 });
 
@@ -484,11 +484,11 @@ $('#btn-save-settings').addEventListener('click', async () => {
 
     const settings = {};
     if (apiKey) settings.apiKey = apiKey;
-    if (hotkey && hotkey !== 'Нажмите комбинацию клавиш...') settings.hotkey = hotkey;
+    if (hotkey && hotkey !== 'Press a key combination...') settings.hotkey = hotkey;
 
     const result = await window.api.saveSettings(settings);
     if (result.success) {
-        showToast('Настройки сохранены', 'success');
+        showToast('Settings saved', 'success');
     }
 });
 

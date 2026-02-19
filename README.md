@@ -1,10 +1,12 @@
 <div align="center">
 
+<img src="assets/icon.png" width="128" height="128" alt="AI Translator Icon">
+
 # ✦ AI Translator
 
-**Десктопный переводчик на базе Google Gemini AI**
+**Desktop Translator powered by Google Gemini AI**
 
-*Быстрый, красивый и умный перевод текста с поддержкой 30+ языков*
+*Fast, beautiful, and smart text translation supporting 30+ languages*
 
 [![Electron](https://img.shields.io/badge/Electron-40-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Gemini AI](https://img.shields.io/badge/Gemini_AI-2.5_Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
@@ -14,141 +16,141 @@
 
 ---
 
-## 🌟 Возможности
+## 🌟 Features
 
-- 🌍 **30+ языков** — поддержка перевода между английским, русским, немецким, французским, испанским, украинским, китайским, японским, корейским, арабским и многими другими языками
-- 🎨 **Три стиля перевода** — выбирайте между официальным, нейтральным и разговорным тоном
-- ⚡ **Мгновенный перевод** — используйте `Ctrl+Enter` или кнопку "Перевести"
-- 🔥 **Google Gemini 2.5 Flash** — самая быстрая модель для точного перевода
-- 🔄 **Быстрая смена языков** — кнопка swap мгновенно меняет языки и текст местами
-- 📋 **История переводов** — автоматическое сохранение последних 100 переводов
-- ⌨️ **Глобальный хоткей** — вызывайте переводчик из любого приложения (по умолчанию `Ctrl+Shift+T`)
-- 🔒 **Системный трей** — приложение работает в фоне и всегда под рукой
-- 🎯 **Недавние языки** — быстрый доступ к часто используемым языкам
+- 🌍 **30+ Languages** — supports translation between English, Russian, German, French, Spanish, Ukrainian, Chinese, Japanese, Korean, Arabic, and many other languages
+- 🎨 **Three Translation Styles** — choose between formal, neutral, and casual tones
+- ⚡ **Instant Translation** — use `Ctrl+Enter` or the "Translate" button
+- 🔥 **Google Gemini 2.5 Flash** — the fastest model for accurate translations
+- 🔄 **Quick Language Swap** — the swap button instantly switches languages and text
+- 📋 **Translation History** — automatically saves the last 100 translations
+- ⌨️ **Global Hotkey** — summon the translator from any application (default `Ctrl+Shift+T`)
+- 🔒 **System Tray** — runs in the background and is always at your fingertips
+- 🎯 **Recent Languages** — quick access to frequently used languages
 
-## 🖥️ Скриншоты
+## 🖥️ Screenshots
 
 <div align="center">
 
-| Основной интерфейс | Выбор стиля перевода |
+| Main Interface | Style Selection |
 |:---:|:---:|
-| *Переводчик с тёмной темой* | *Официальный / Нейтральный / Разговорный* |
+| <img src="assets/screenshot.jpg" width="400" alt="Main Interface"> | *Formal / Neutral / Casual* |
 
 </div>
 
-## 🚀 Установка
+## 🚀 Installation
 
-### Требования
+### Requirements
 
 - [Node.js](https://nodejs.org/) 18+ 
-- API-ключ [Google Gemini](https://aistudio.google.com/apikey)
+- [Google Gemini](https://aistudio.google.com/apikey) API Key
 
-### Шаги
+### Steps
 
-1. **Клонируйте репозиторий:**
+1. **Clone the repository:**
 
 ```bash
 git clone https://github.com/your-username/ai-translator.git
 cd ai-translator
 ```
 
-2. **Установите зависимости:**
+2. **Install dependencies:**
 
 ```bash
 npm install
 ```
 
-3. **Запустите приложение:**
+3. **Run the application:**
 
 ```bash
 npm start
 ```
 
-4. **Настройте API-ключ:**
-   - Нажмите на иконку ⚙️ в верхней панели
-   - Вставьте ваш Google Gemini API-ключ
-   - Нажмите «Сохранить настройки»
+4. **Configure your API Key:**
+   - Click the ⚙️ icon in the top panel
+   - Paste your Google Gemini API key
+   - Click "Save Settings"
 
-## 📖 Использование
+## 📖 Usage
 
-### Базовый перевод
-1. Выберите исходный и целевой языки
-2. Введите или вставьте текст
-3. Нажмите **«Перевести»** или `Ctrl+Enter`
+### Basic Translation
+1. Select source and target languages
+2. Enter or paste text
+3. Click **"Translate"** or press `Ctrl+Enter`
 
-### Стиль перевода
-Переключайте стиль перевода одним кликом:
+### Translation Style
+Switch translation style with one click:
 
-| Стиль | Описание | Пример |
-|-------|----------|--------|
-| 💼 **Официальный** | Деловой, формальный тон | *"Уважаемые коллеги, рады сообщить..."* |
-| 😊 **Нейтральный** | Стандартный перевод | *"Мы рады сообщить..."* |
-| 💬 **Разговорный** | Неформальный, дружеский | *"Привет! Хотели рассказать..."* |
+| Style | Description | Example |
+|-------|-------------|---------|
+| 💼 **Formal** | Business, professional tone | *"Dear colleagues, we are pleased to inform you..."* |
+| 😊 **Neutral** | Standard translation | *"We are happy to announce..."* |
+| 💬 **Casual** | Informal, friendly | *"Hey! Just wanted to let you know..."* |
 
-### Глобальный хоткей
-- По умолчанию: `Ctrl+Shift+T`
-- Настраивается в разделе ⚙️ Настройки
+### Global Hotkey
+- Default: `Ctrl+Shift+T`
+- Configurable in the ⚙️ Settings section
 
-### История
-- Все переводы автоматически сохраняются
-- Кликните на запись для повторного использования
-- Нажмите 🕐 для просмотра истории
+### History
+- All translations are saved automatically
+- Click an entry to use it again
+- Click 🕐 to view your history
 
-## 🛠️ Технологии
+## 🛠️ Technologies
 
-| Технология | Назначение |
+| Technology | Purpose |
 |-----------|-----------|
-| [Electron](https://www.electronjs.org/) | Десктопное приложение |
-| [Google Gemini AI](https://ai.google.dev/) | Движок перевода |
-| [electron-store](https://github.com/sindresorhus/electron-store) | Хранение настроек и истории |
-| HTML/CSS/JS | Интерфейс |
+| [Electron](https://www.electronjs.org/) | Desktop application |
+| [Google Gemini AI](https://ai.google.dev/) | Translation engine |
+| [electron-store](https://github.com/sindresorhus/electron-store) | Storing settings and history |
+| HTML/CSS/JS | Interface |
 
-## 📁 Структура проекта
+## 📁 Project Structure
 
 ```
 ai-translator/
-├── main.js          # Главный процесс Electron, Gemini API, IPC
-├── preload.js       # Preload-скрипт, bridge между main и renderer
-├── renderer.js      # UI логика, управление интерфейсом
-├── index.html       # Разметка интерфейса
-├── styles.css       # Стили приложения
-├── package.json     # Зависимости и метаданные
-└── README.md        # Документация
+├── main.js          # Main Electron process, Gemini API, IPC
+├── preload.js       # Preload script, bridge between main and renderer
+├── renderer.js      # UI logic, interface management
+├── index.html       # Interface layout
+├── styles.css       # Application styles
+├── package.json     # Dependencies and metadata
+└── README.md        # Documentation
 ```
 
-## ⚙️ Конфигурация
+## ⚙️ Configuration
 
-Настройки хранятся локально через `electron-store`:
+Settings are stored locally via `electron-store`:
 
-| Параметр | Описание | По умолчанию |
+| Parameter | Description | Default |
 |---------|----------|-------------|
-| `apiKey` | API-ключ Google Gemini | — |
-| `hotkey` | Глобальный хоткей | `Ctrl+Shift+T` |
-| `windowBounds` | Размер окна | `860×640` |
-| `recentLanguages` | Недавние языки | `en, ru, de, fr, ...` |
+| `apiKey` | Google Gemini API Key | — |
+| `hotkey` | Global Hotkey | `Ctrl+Shift+T` |
+| `windowBounds` | Window Size | `860×640` |
+| `recentLanguages` | Recent Languages | `en, ru, de, fr, ...` |
 
-## 🤝 Участие в разработке
+## 🤝 Contributing
 
-Приветствуются любые вклады! Пулл-реквесты, баг-репорты и предложения — всё welcome.
+Contributions are welcome! Pull requests, bug reports, and suggestions are all welcome.
 
-1. Форкните репозиторий
-2. Создайте ветку (`git checkout -b feature/amazing-feature`)
-3. Закоммитьте изменения (`git commit -m 'Add amazing feature'`)
-4. Запушьте ветку (`git push origin feature/amazing-feature`)
-5. Откройте Pull Request
+1. Fork the repository
+2. Create a branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 📄 Лицензия
+## 📄 License
 
-Этот проект доступен **только для некоммерческого использования**. Вы можете свободно использовать, копировать и модифицировать код в личных, образовательных и некоммерческих целях.
+This project is available for **non-commercial use only**. You may freely use, copy, and modify the code for personal, educational, and non-commercial purposes.
 
-**Для коммерческого использования** — свяжитесь с автором: [GitHub](https://github.com/pablosensei).
+**For commercial use** — please contact the author: [GitHub](https://github.com/pablosensei).
 
-Подробности в файле [LICENSE](LICENSE).
+Details are in the [LICENSE](LICENSE) file.
 
 ---
 
 <div align="center">
 
-**Сделано с ✦ и Google Gemini AI**
+**Made with ✦ and Google Gemini AI**
 
 </div>

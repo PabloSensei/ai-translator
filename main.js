@@ -74,39 +74,19 @@ function createWindow() {
   });
 }
 
-// --- Иконка трея (нарисованная программно) ---
-function createTrayIcon() {
-  const size = 32;
-  const canvas = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-      <defs>
-        <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" style="stop-color:#6366f1"/>
-          <stop offset="100%" style="stop-color:#a855f7"/>
-        </linearGradient>
-      </defs>
-      <rect width="${size}" height="${size}" rx="6" fill="url(#bg)"/>
-      <text x="50%" y="56%" dominant-baseline="middle" text-anchor="middle" fill="white" font-size="18" font-family="Segoe UI,Arial" font-weight="bold">T</text>
-    </svg>
-  `;
-
-  // Создаём PNG из SVG через data URI
-  const dataUrl = `data:image/svg+xml;base64,${Buffer.from(canvas).toString('base64')}`;
-  return nativeImage.createFromDataURL(dataUrl);
-}
-
+// --- Иконка трея ---
 function createTray() {
-  const icon = createTrayIcon();
-  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  const iconPath = path.join(__dirname, 'assets', 'icon_tray.png');
+  tray = new Tray(iconPath);
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: 'Показать / Скрыть',
+      label: 'Show / Hide',
       click: () => toggleWindow()
     },
     { type: 'separator' },
     {
-      label: 'Выход',
+      label: 'Quit',
       click: () => {
         app.isQuitting = true;
         app.quit();
@@ -114,7 +94,7 @@ function createTray() {
     }
   ]);
 
-  tray.setToolTip('Gemini Translator');
+  tray.setToolTip('AI Translator');
   tray.setContextMenu(contextMenu);
 
   tray.on('double-click', () => toggleWindow());
@@ -147,7 +127,7 @@ function registerHotkey() {
 // --- Gemini API ---
 async function translateText(text, sourceLang, targetLang, apiKey, style = 'neutral') {
   if (!apiKey) {
-    throw new Error('API-ключ не задан. Введите ключ в настройках.');
+    throw new Error('API key is not set. Please enter it in the settings.');
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
