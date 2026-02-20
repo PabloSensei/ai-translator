@@ -276,8 +276,19 @@ function setupIPC() {
   ipcMain.on('register-hotkey', () => registerHotkey());
 
   // Opening links in browser
-  ipcMain.on('open-external', (event, url) => shell.openExternal(url));
-}
+  ipcMain.on('open-external', async (event, url) => {
+    if (!url || typeof url !== 'string') return;
+    try {
+      const parsed = new URL(url);
+      if (['http:', 'https:'].includes(parsed.protocol)) {
+        await shell.openExternal(url);
+      } else {
+        console.warn(`Blocked potential security risk: ${url}`);
+      }
+    } catch (err) {
+      console.warn(`Invalid URL passed to open-external: ${url}`);
+    }
+  });
 
 function updateRecentLanguages(source, target) {
   const recent = settingsStore.get('recentLanguages') || [];
