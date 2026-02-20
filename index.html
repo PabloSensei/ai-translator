@@ -2,6 +2,7 @@
 <html lang="en">
 
 <head>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:;">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gemini Translator</title>
@@ -148,7 +149,7 @@
       <!-- Translate Button -->
       <button class="translate-btn" id="btn-translate">
         <span class="translate-btn-text">Translate</span>
-        <div class="translate-btn-loader" id="loader" style="display:none;">
+        <div class="translate-btn-loader" id="loader">
           <div class="spinner"></div>
         </div>
       </button>

@@ -324,11 +324,11 @@ async function doTranslate() {
 
             showToast(isSameLang ? 'Text fixed successfully' : 'Translation successful', 'success');
         } else {
-            targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">${result.error}</span>`;
+            targetText.innerHTML = `<span class="placeholder error-text">${escapeHtml(result.error)}</span>`;
             showToast(result.error, 'error');
         }
     } catch (err) {
-        targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">Error: ${err.message}</span>`;
+        targetText.innerHTML = `<span class="placeholder error-text">Error: ${escapeHtml(err.message)}</span>`;
         showToast(isSameLang ? 'Fixing error' : 'Translation error', 'error');
     } finally {
         isTranslating = false;
