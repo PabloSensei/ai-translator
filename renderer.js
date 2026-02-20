@@ -137,10 +137,22 @@ function buildDropdown(container, type) {
 function filterDropdown(container, query) {
     const options = container.querySelectorAll('.lang-option');
     const q = query.toLowerCase();
+
+    // Optimization: Batch DOM updates and cache search terms
     options.forEach(option => {
-        const text = option.textContent.toLowerCase();
-        const code = option.dataset.code.toLowerCase();
-        option.style.display = (text.includes(q) || code.includes(q)) ? '' : 'none';
+        // Cache search text to avoid layout thrashing and string allocs
+        if (!option._searchText) {
+            option._searchText = (option.textContent || '').toLowerCase();
+            option._searchCode = (option.dataset.code || '').toLowerCase();
+        }
+
+        const shouldShow = option._searchText.includes(q) || option._searchCode.includes(q);
+        const newDisplay = shouldShow ? '' : 'none';
+
+        // Only touch DOM if changed
+        if (option.style.display !== newDisplay) {
+            option.style.display = newDisplay;
+        }
     });
 }
 
