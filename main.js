@@ -2,7 +2,7 @@ const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, na
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-// electron-store — ESM-only модуль начиная с v9, используем динамический import
+// electron-store — ESM-only module starting from v9, use dynamic import
 let Store;
 let settingsStore;
 let historyStore;
@@ -59,8 +59,8 @@ async function initStores() {
     // If decrypted value equals the input, it means decryption failed (fallback) or wasn't needed,
     // which implies it is currently stored as plaintext (or invalid).
     if (decrypted === currentKey) {
-       console.log('Migrating API key to encrypted storage...');
-       settingsStore.set('apiKey', encryptApiKey(currentKey));
+      console.log('Migrating API key to encrypted storage...');
+      settingsStore.set('apiKey', encryptApiKey(currentKey));
     }
   }
 
@@ -69,7 +69,7 @@ async function initStores() {
 let mainWindow;
 let tray;
 
-// --- Создание окна ---
+// --- Window Creation ---
 function createWindow() {
   const bounds = settingsStore.get('windowBounds');
 
@@ -97,7 +97,7 @@ function createWindow() {
     mainWindow.show();
   });
 
-  // Скрыть в трей при закрытии
+  // Hide to tray on close
   mainWindow.on('close', (e) => {
     if (!app.isQuitting) {
       e.preventDefault();
@@ -111,7 +111,7 @@ function createWindow() {
   });
 }
 
-// --- Иконка трея ---
+// --- Tray Icon ---
 function createTray() {
   const iconPath = path.join(__dirname, 'assets', 'icon_tray.png');
   tray = new Tray(iconPath);
@@ -146,7 +146,7 @@ function toggleWindow() {
   }
 }
 
-// --- Глобальный хоткей ---
+// --- Global Hotkey ---
 function registerHotkey() {
   const hotkey = settingsStore.get('hotkey') || 'Ctrl+Shift+T';
 
@@ -196,14 +196,14 @@ async function translateText(text, sourceLang, targetLang, apiKey, style = 'neut
 
 // --- IPC Handlers ---
 function setupIPC() {
-  // Перевод
+  // Translation
   ipcMain.handle('translate', async (event, { text, sourceLang, targetLang, style }) => {
     try {
       const apiKey = decryptApiKey(settingsStore.get('apiKey'));
       const modelName = settingsStore.get('model') || 'gemini-2.5-flash';
       const translated = await translateText(text, sourceLang, targetLang, apiKey, style, modelName);
 
-      // Сохранить в историю
+      // Save to history
       const items = historyStore.get('items') || [];
       items.unshift({
         id: Date.now(),
@@ -213,11 +213,11 @@ function setupIPC() {
         targetLang,
         timestamp: new Date().toISOString()
       });
-      // Макс 100 записей
+      // Max 100 entries
       if (items.length > 100) items.length = 100;
       historyStore.set('items', items);
 
-      // Обновить недавние языки
+      // Update recent languages
       updateRecentLanguages(sourceLang, targetLang);
 
       return { success: true, translated };
@@ -226,7 +226,7 @@ function setupIPC() {
     }
   });
 
-  // Настройки
+  // Settings
   ipcMain.handle('get-settings', () => {
     return {
       apiKey: decryptApiKey(settingsStore.get('apiKey')),
@@ -246,7 +246,7 @@ function setupIPC() {
     return { success: true };
   });
 
-  // История
+  // History
   ipcMain.handle('get-history', () => {
     return historyStore.get('items') || [];
   });
@@ -262,32 +262,32 @@ function setupIPC() {
     return { success: true };
   });
 
-  // Недавние языки
+  // Recent languages
   ipcMain.handle('get-recent-languages', () => {
     return settingsStore.get('recentLanguages') || [];
   });
 
-  // Управление окном
+  // Window management
   ipcMain.on('window-minimize', () => mainWindow.minimize());
   ipcMain.on('window-close', () => mainWindow.hide());
 
-  // Управление хоткеями
+  // Hotkey management
   ipcMain.on('unregister-hotkey', () => globalShortcut.unregisterAll());
   ipcMain.on('register-hotkey', () => registerHotkey());
 
-  // Открытие ссылок в браузере
+  // Opening links in browser
   ipcMain.on('open-external', (event, url) => shell.openExternal(url));
 }
 
 function updateRecentLanguages(source, target) {
   const recent = settingsStore.get('recentLanguages') || [];
 
-  // Переместить в начало
+  // Move to start
   const filtered = recent.filter(l => l !== source && l !== target);
   filtered.unshift(target);
   filtered.unshift(source);
 
-  // Макс 10
+  // Max 10
   if (filtered.length > 10) filtered.length = 10;
   settingsStore.set('recentLanguages', filtered);
 }
@@ -302,7 +302,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  // Не закрывать приложение
+  // Do not close the application
 });
 
 app.on('will-quit', () => {

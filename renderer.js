@@ -1,4 +1,4 @@
-// ===== Список языков =====
+// ===== Language List =====
 const LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇬🇧' },
     { code: 'ru', name: 'Russian', flag: '🇷🇺' },
@@ -38,14 +38,14 @@ const LANGUAGES = [
     { code: 'ka', name: 'ქართული', flag: '🇬🇪' },
 ];
 
-// ===== Состояние =====
+// ===== State =====
 let currentSourceLang = 'en';
 let currentTargetLang = 'ru';
 let currentStyle = 'neutral'; // 'formal' | 'neutral' | 'casual'
 let isTranslating = false;
 let currentHotkey = 'Ctrl+Shift+T';
 
-// ===== DOM элементы =====
+// ===== DOM Elements =====
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
@@ -62,11 +62,11 @@ const translateBtn = $('#btn-translate');
 const loader = $('#loader');
 const recentLangsContainer = $('#recent-langs');
 
-// ===== Инициализация =====
+// ===== Initialization =====
 async function init() {
     const settings = await window.api.getSettings();
 
-    // Установить API ключ если есть
+    // Set API key if present
     if (settings.apiKey) {
         $('#api-key-input').value = settings.apiKey;
     }
@@ -80,28 +80,28 @@ async function init() {
         $('#model-select').value = settings.model;
     }
 
-    // Создать выпадающие списки языков
+    // Create language dropdowns
     buildDropdown(sourceLangDropdown, 'source');
     buildDropdown(targetLangDropdown, 'target');
 
-    // Обновить отображение языков
+    // Update language display
     updateLangDisplay();
 
-    // Недавние языки
+    // Recent languages
     renderRecentLanguages(settings.recentLanguages || []);
 
-    // Загрузить историю
+    // Load history
     loadHistory();
 
-    // Стиль перевода
+    // Translation style
     initStyleSelector();
 }
 
-// ===== Построение Dropdown =====
+// ===== Dropdown Construction =====
 function buildDropdown(container, type) {
     container.innerHTML = '';
 
-    // Поиск
+    // Search
     const searchWrap = document.createElement('div');
     searchWrap.className = 'lang-dropdown-search';
     const searchInput = document.createElement('input');
@@ -113,7 +113,7 @@ function buildDropdown(container, type) {
     searchWrap.appendChild(searchInput);
     container.appendChild(searchWrap);
 
-    // Опции
+    // Options
     LANGUAGES.forEach(lang => {
         const option = document.createElement('div');
         option.className = 'lang-option';
@@ -151,7 +151,7 @@ function updateLangDisplay() {
     sourceLangLabel.textContent = source ? source.name : currentSourceLang;
     targetLangLabel.textContent = target ? target.name : currentTargetLang;
 
-    // Обновить selected состояние
+    // Update selected state
     sourceLangDropdown.querySelectorAll('.lang-option').forEach(opt => {
         opt.classList.toggle('selected', opt.dataset.code === currentSourceLang);
     });
@@ -164,21 +164,21 @@ function updateLangDisplay() {
         translateBtn.querySelector('.translate-btn-text').textContent = isSameLang ? 'Fix Errors' : 'Translate';
     }
 
-    // Обновить плейсхолдер если он есть
+    // Update placeholder if present
     const placeholder = targetText.querySelector('.placeholder');
     if (placeholder && !isTranslating) {
         placeholder.textContent = isSameLang ? 'Corrected text will appear here...' : 'Translation will appear here...';
     }
 }
 
-// ===== Dropdown открытие/закрытие =====
+// ===== Dropdown Open/Close =====
 function toggleDropdown(btn, dropdown) {
     const isOpen = dropdown.classList.contains('open');
     closeAllDropdowns();
     if (!isOpen) {
         dropdown.classList.add('open');
         btn.classList.add('open');
-        // Фокус на поиск
+        // Focus on search
         const searchInput = dropdown.querySelector('input');
         if (searchInput) {
             searchInput.value = '';
@@ -211,17 +211,17 @@ document.addEventListener('click', (e) => {
 
 // ===== Swap =====
 swapBtn.addEventListener('click', () => {
-    // Анимация
+    // Animation
     swapBtn.classList.add('swapping');
     setTimeout(() => swapBtn.classList.remove('swapping'), 400);
 
-    // Поменять языки
+    // Change languages
     const tempLang = currentSourceLang;
     currentSourceLang = currentTargetLang;
     currentTargetLang = tempLang;
     updateLangDisplay();
 
-    // Поменять тексты
+    // Change texts
     const tempText = sourceText.value;
     const currentTarget = targetText.textContent;
     const placeholder = targetText.querySelector('.placeholder');
@@ -233,11 +233,11 @@ swapBtn.addEventListener('click', () => {
     }
 });
 
-// ===== Недавние языки =====
+// ===== Recent Languages =====
 function renderRecentLanguages(recentCodes) {
     recentLangsContainer.innerHTML = '';
 
-    // Показать пары для быстрого выбора
+    // Show pairs for quick selection
     const pairs = [];
     for (let i = 0; i < recentCodes.length - 1; i += 2) {
         const src = LANGUAGES.find(l => l.code === recentCodes[i]);
@@ -247,7 +247,7 @@ function renderRecentLanguages(recentCodes) {
         }
     }
 
-    // Также добавить отдельные языки как чипы
+    // Also add individual languages as chips
     const uniqueCodes = [...new Set(recentCodes)].slice(0, 8);
     uniqueCodes.forEach(code => {
         const lang = LANGUAGES.find(l => l.code === code);
@@ -257,7 +257,7 @@ function renderRecentLanguages(recentCodes) {
         chip.className = 'recent-chip';
         chip.textContent = `${lang.flag} ${lang.name}`;
         chip.addEventListener('click', () => {
-            // Если это текущий source — ставим как target, иначе как source
+            // If it is current source — set as target, otherwise as source
             if (currentSourceLang === code) {
                 currentTargetLang = code;
             } else {
@@ -269,7 +269,7 @@ function renderRecentLanguages(recentCodes) {
     });
 }
 
-// ===== Стиль перевода =====
+// ===== Translation Style =====
 function initStyleSelector() {
     const styleBtns = document.querySelectorAll('.style-btn');
     styleBtns.forEach(btn => {
@@ -281,7 +281,7 @@ function initStyleSelector() {
     });
 }
 
-// ===== Перевод =====
+// ===== Translation =====
 translateBtn.addEventListener('click', doTranslate);
 
 sourceText.addEventListener('keydown', (e) => {
@@ -318,7 +318,7 @@ async function doTranslate() {
         if (result.success) {
             targetText.textContent = result.translated;
 
-            // Обновить недавние
+            // Update recent
             const recent = await window.api.getRecentLanguages();
             renderRecentLanguages(recent);
 
@@ -338,7 +338,7 @@ async function doTranslate() {
     }
 }
 
-// ===== Действия с текстом =====
+// ===== Text Actions =====
 $('#btn-clear').addEventListener('click', () => {
     sourceText.value = '';
     const isSameLang = currentSourceLang === currentTargetLang;
@@ -367,7 +367,7 @@ $('#btn-copy').addEventListener('click', async () => {
     }
 });
 
-// ===== Навигация =====
+// ===== Navigation =====
 function showView(viewId) {
     $$('.view').forEach(v => v.classList.remove('active'));
     $(`#view-${viewId}`).classList.add('active');
@@ -392,7 +392,7 @@ $('#btn-history').addEventListener('click', () => {
     }
 });
 
-// ===== История =====
+// ===== History =====
 async function loadHistory() {
     const items = await window.api.getHistory();
     const container = $('#history-list');
@@ -434,14 +434,14 @@ async function loadHistory() {
       </button>
     `;
 
-        // Клик — загрузить в переводчик
+        // Click — load into translator
         el.addEventListener('click', (e) => {
             if (e.target.closest('.history-item-delete')) return;
 
             sourceText.value = item.sourceText;
             targetText.textContent = item.targetText;
 
-            // Найти коды языков по названиям
+            // Find language codes by names
             const src = LANGUAGES.find(l => l.name === item.sourceLang);
             const tgt = LANGUAGES.find(l => l.name === item.targetLang);
             if (src) currentSourceLang = src.code;
@@ -451,7 +451,7 @@ async function loadHistory() {
             showView('translate');
         });
 
-        // Удалить запись
+        // Delete entry
         el.querySelector('.history-item-delete').addEventListener('click', async (e) => {
             e.stopPropagation();
             await window.api.deleteHistoryItem(item.id);
@@ -472,7 +472,7 @@ $('#btn-clear-history').addEventListener('click', async () => {
     showToast('History cleared', 'info');
 });
 
-// ===== Настройки =====
+// ===== Settings =====
 $('#toggle-api-key').addEventListener('click', () => {
     const input = $('#api-key-input');
     input.type = input.type === 'password' ? 'text' : 'password';
@@ -548,11 +548,11 @@ $('#link-aistudio').addEventListener('click', (e) => {
     window.api.openExternal('https://aistudio.google.com/apikey');
 });
 
-// ===== Управление окном =====
+// ===== Window Management =====
 $('#btn-minimize').addEventListener('click', () => window.api.windowMinimize());
 $('#btn-close').addEventListener('click', () => window.api.windowClose());
 
-// ===== Toast уведомления =====
+// ===== Toast Notifications =====
 function showToast(message, type = 'info') {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
@@ -567,12 +567,12 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// ===== Утилиты =====
+// ===== Utilities =====
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// ===== Запуск =====
+// ===== Start =====
 init();
