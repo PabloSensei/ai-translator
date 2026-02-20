@@ -22,7 +22,7 @@
 - 🛠️ **Grammar & Style Fixer** — select the same source and target language to fix errors and rewrite text in a chosen style
 - 🎨 **Three Translation Styles** — choose between formal, neutral, and casual tones
 - ⚡ **Instant Translation** — use `Ctrl+Enter` or the "Translate" button
-- 🔥 **Google Gemini 2.5 Flash** — the fastest model for accurate translations
+- 🔥 **Google Gemini Models** — choose between different Google AI models for accurate translations
 - 🔄 **Quick Language Swap** — the swap button instantly switches languages and text
 - 📋 **Translation History** — automatically saves the last 100 translations
 - ⌨️ **Global Hotkey** — summon the translator from any application (default `Ctrl+Shift+T`)
