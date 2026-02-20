@@ -899,3 +899,11 @@ body::after {
     position: relative;
     z-index: 1;
 }
+/* ===== Security Fixes ===== */
+#loader {
+    display: none;
+}
+
+.error-text {
+    color: var(--error);
+}
