@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, dialog, shell } = require('electron');
+const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
@@ -6,6 +6,30 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 let Store;
 let settingsStore;
 let historyStore;
+
+
+// --- Security Helpers ---
+function encryptApiKey(text) {
+  if (!text) return '';
+  if (!safeStorage.isEncryptionAvailable()) return text;
+  try {
+    return safeStorage.encryptString(text).toString('hex');
+  } catch (e) {
+    console.error('Encryption error:', e);
+    return text;
+  }
+}
+
+function decryptApiKey(text) {
+  if (!text) return '';
+  if (!safeStorage.isEncryptionAvailable()) return text;
+  try {
+    const buffer = Buffer.from(text, 'hex');
+    return safeStorage.decryptString(buffer);
+  } catch (e) {
+    return text;
+  }
+}
 
 async function initStores() {
   const mod = await import('electron-store');
@@ -28,6 +52,18 @@ async function initStores() {
       items: []
     }
   });
+  // Migrate legacy plaintext API key
+  const currentKey = settingsStore.get('apiKey');
+  if (currentKey && safeStorage.isEncryptionAvailable()) {
+    const decrypted = decryptApiKey(currentKey);
+    // If decrypted value equals the input, it means decryption failed (fallback) or wasn't needed,
+    // which implies it is currently stored as plaintext (or invalid).
+    if (decrypted === currentKey) {
+       console.log('Migrating API key to encrypted storage...');
+       settingsStore.set('apiKey', encryptApiKey(currentKey));
+    }
+  }
+
 }
 
 let mainWindow;
@@ -163,7 +199,7 @@ function setupIPC() {
   // Перевод
   ipcMain.handle('translate', async (event, { text, sourceLang, targetLang, style }) => {
     try {
-      const apiKey = settingsStore.get('apiKey');
+      const apiKey = decryptApiKey(settingsStore.get('apiKey'));
       const modelName = settingsStore.get('model') || 'gemini-2.5-flash';
       const translated = await translateText(text, sourceLang, targetLang, apiKey, style, modelName);
 
@@ -193,7 +229,7 @@ function setupIPC() {
   // Настройки
   ipcMain.handle('get-settings', () => {
     return {
-      apiKey: settingsStore.get('apiKey'),
+      apiKey: decryptApiKey(settingsStore.get('apiKey')),
       hotkey: settingsStore.get('hotkey'),
       recentLanguages: settingsStore.get('recentLanguages'),
       model: settingsStore.get('model') || 'gemini-2.5-flash'
@@ -201,7 +237,7 @@ function setupIPC() {
   });
 
   ipcMain.handle('save-settings', (event, settings) => {
-    if (settings.apiKey !== undefined) settingsStore.set('apiKey', settings.apiKey);
+    if (settings.apiKey !== undefined) settingsStore.set('apiKey', encryptApiKey(settings.apiKey));
     if (settings.model !== undefined) settingsStore.set('model', settings.model);
     if (settings.hotkey !== undefined) {
       settingsStore.set('hotkey', settings.hotkey);
