@@ -289,6 +289,7 @@ function setupIPC() {
       console.warn(`Invalid URL passed to open-external: ${url}`);
     }
   });
+}
 
 function updateRecentLanguages(source, target) {
   const recent = settingsStore.get('recentLanguages') || [];
