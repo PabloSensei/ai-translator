@@ -179,7 +179,7 @@ function updateLangDisplay() {
     // Update placeholder if present
     const placeholder = targetText.querySelector('.placeholder');
     if (placeholder && !isTranslating) {
-        placeholder.textContent = isSameLang ? 'Corrected text will appear here...' : 'Translation will appear here...';
+        placeholder.textContent = getPlaceholderText(isSameLang);
     }
 }
 
@@ -241,7 +241,7 @@ swapBtn.addEventListener('click', () => {
     if (currentTarget && !placeholder) {
         sourceText.value = currentTarget;
         const isSameLang = currentSourceLang === currentTargetLang;
-        targetText.innerHTML = tempText || `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+        targetText.innerHTML = tempText || renderPlaceholder(getPlaceholderText(isSameLang));
     }
 });
 
@@ -314,7 +314,7 @@ async function doTranslate() {
     translateBtn.disabled = true;
     translateBtn.querySelector('.translate-btn-text').textContent = actionText;
     loader.style.display = 'flex';
-    targetText.innerHTML = `<span class="placeholder">${actionText}</span>`;
+    targetText.innerHTML = renderPlaceholder(actionText);
 
     try {
         const sourceLang = LANGUAGES.find(l => l.code === currentSourceLang)?.name || currentSourceLang;
@@ -336,11 +336,11 @@ async function doTranslate() {
 
             showToast(isSameLang ? 'Text fixed successfully' : 'Translation successful', 'success');
         } else {
-            targetText.innerHTML = `<span class="placeholder error-text">${escapeHtml(result.error)}</span>`;
+            targetText.innerHTML = renderPlaceholder(escapeHtml(result.error), true);
             showToast(result.error, 'error');
         }
     } catch (err) {
-        targetText.innerHTML = `<span class="placeholder error-text">Error: ${escapeHtml(err.message)}</span>`;
+        targetText.innerHTML = renderPlaceholder(`Error: ${escapeHtml(err.message)}`, true);
         showToast(isSameLang ? 'Fixing error' : 'Translation error', 'error');
     } finally {
         isTranslating = false;
@@ -354,7 +354,7 @@ async function doTranslate() {
 $('#btn-clear').addEventListener('click', () => {
     sourceText.value = '';
     const isSameLang = currentSourceLang === currentTargetLang;
-    targetText.innerHTML = `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+    targetText.innerHTML = renderPlaceholder(getPlaceholderText(isSameLang));
     sourceText.focus();
 });
 
@@ -584,6 +584,26 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Returns the default placeholder text based on whether the source and target languages are the same.
+ * @param {boolean} isSameLang
+ * @returns {string}
+ */
+function getPlaceholderText(isSameLang) {
+    return `${isSameLang ? 'Corrected text' : 'Translation'} will appear here...`;
+}
+
+/**
+ * Renders the placeholder HTML string.
+ * @param {string} content - The text content or HTML to put inside the placeholder.
+ * @param {boolean} isError - Whether the placeholder should have the error-text class.
+ * @returns {string}
+ */
+function renderPlaceholder(content, isError = false) {
+    const errorClass = isError ? ' error-text' : '';
+    return `<span class="placeholder${errorClass}">${content}</span>`;
 }
 
 // ===== Start =====
