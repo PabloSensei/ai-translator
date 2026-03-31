@@ -17,12 +17,21 @@ const ipcMain = {
 
 // Simulate the fixed logic
 // This logic will be copied into main.js
+const ALLOWED_EXTERNAL_URLS = [
+  'https://aistudio.google.com/apikey',
+  'https://aistudio.google.com/'
+];
+
 ipcMain.on('open-external', async (event, url) => {
   if (!url || typeof url !== 'string') return;
   try {
     const parsed = new URL(url);
     if (['http:', 'https:'].includes(parsed.protocol)) {
-      await shell.openExternal(url);
+      if (ALLOWED_EXTERNAL_URLS.includes(url)) {
+        await shell.openExternal(url);
+      } else {
+        console.warn(`[BLOCKED] URL not in allowlist: ${url}`);
+      }
     } else {
       console.warn(`[BLOCKED] Protocol not allowed: ${url}`);
     }
@@ -36,8 +45,10 @@ ipcMain.on('open-external', async (event, url) => {
   console.log('--- Testing URL Validation Logic ---');
 
   const tests = [
-    { input: 'https://google.com', expected: true },
-    { input: 'http://example.com', expected: true },
+    { input: 'https://aistudio.google.com/apikey', expected: true },
+    { input: 'https://aistudio.google.com/', expected: true },
+    { input: 'https://google.com', expected: false },
+    { input: 'http://example.com', expected: false },
     { input: 'file:///etc/passwd', expected: false },
     { input: 'javascript:alert(1)', expected: false },
     { input: 'sftp://example.com', expected: false },

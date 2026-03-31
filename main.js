@@ -199,6 +199,11 @@ async function translateText(text, sourceLang, targetLang, apiKey, style = 'neut
 }
 
 // --- IPC Handlers ---
+const ALLOWED_EXTERNAL_URLS = [
+  'https://aistudio.google.com/apikey',
+  'https://aistudio.google.com/'
+];
+
 function setupIPC() {
   // Translation
   ipcMain.handle('translate', async (event, { text, sourceLang, targetLang, style }) => {
@@ -285,9 +290,13 @@ function setupIPC() {
     try {
       const parsed = new URL(url);
       if (['http:', 'https:'].includes(parsed.protocol)) {
-        await shell.openExternal(url);
+        if (ALLOWED_EXTERNAL_URLS.includes(url)) {
+          await shell.openExternal(url);
+        } else {
+          console.warn(`Blocked URL not in allowlist: ${url}`);
+        }
       } else {
-        console.warn(`Blocked potential security risk: ${url}`);
+        console.warn(`Blocked potential security risk (invalid protocol): ${url}`);
       }
     } catch (err) {
       console.warn(`Invalid URL passed to open-external: ${url}`);
