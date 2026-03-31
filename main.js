@@ -293,15 +293,8 @@ function setupIPC() {
 
 function updateRecentLanguages(source, target) {
   const recent = settingsStore.get('recentLanguages') || [];
-
-  // Move to start
-  const filtered = recent.filter(l => l !== source && l !== target);
-  filtered.unshift(target);
-  filtered.unshift(source);
-
-  // Max 10
-  if (filtered.length > 10) filtered.length = 10;
-  settingsStore.set('recentLanguages', filtered);
+  const updated = [...new Set([source, target, ...recent])].slice(0, 10);
+  settingsStore.set('recentLanguages', updated);
 }
 
 // --- App lifecycle ---
