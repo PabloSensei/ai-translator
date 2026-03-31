@@ -586,12 +586,5 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// ===== Utilities =====
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 // ===== Start =====
 init();
