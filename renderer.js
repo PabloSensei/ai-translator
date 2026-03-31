@@ -117,6 +117,7 @@ function buildDropdown(container, type) {
     container.appendChild(searchWrap);
 
     // Options
+    const fragment = document.createDocumentFragment();
     LANGUAGES.forEach(lang => {
         const option = document.createElement('div');
         option.className = 'lang-option';
@@ -133,8 +134,9 @@ function buildDropdown(container, type) {
             closeAllDropdowns();
         });
 
-        container.appendChild(option);
+        fragment.appendChild(option);
     });
+    container.appendChild(fragment);
 }
 
 function filterDropdown(container, query) {
@@ -268,6 +270,7 @@ function renderRecentLanguages(recentCodes) {
 
     // Also add individual languages as chips
     const uniqueCodes = [...new Set(recentCodes)].slice(0, 8);
+    const fragment = document.createDocumentFragment();
     uniqueCodes.forEach(code => {
         const lang = LANGUAGES_BY_CODE.get(code);
         if (!lang) return;
@@ -284,8 +287,9 @@ function renderRecentLanguages(recentCodes) {
             }
             updateLangDisplay();
         });
-        recentLangsContainer.appendChild(chip);
+        fragment.appendChild(chip);
     });
+    recentLangsContainer.appendChild(fragment);
 }
 
 // ===== Translation Style =====
@@ -426,6 +430,7 @@ async function loadHistory() {
     }
 
     container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
 
     items.forEach(item => {
         const el = document.createElement('div');
@@ -481,8 +486,9 @@ async function loadHistory() {
             }, 200);
         });
 
-        container.appendChild(el);
+        fragment.appendChild(el);
     });
+    container.appendChild(fragment);
 }
 
 $('#btn-clear-history').addEventListener('click', async () => {
