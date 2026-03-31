@@ -241,7 +241,11 @@ swapBtn.addEventListener('click', () => {
     if (currentTarget && !placeholder) {
         sourceText.value = currentTarget;
         const isSameLang = currentSourceLang === currentTargetLang;
-        targetText.innerHTML = tempText || `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+        if (tempText) {
+            targetText.textContent = tempText;
+        } else {
+            targetText.innerHTML = `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+        }
     }
 });
 
@@ -433,9 +437,9 @@ async function loadHistory() {
         el.innerHTML = `
       <div class="history-item-header">
         <div class="history-item-langs">
-          <span>${item.sourceLang}</span>
+          <span>${escapeHtml(item.sourceLang)}</span>
           <span class="arrow">→</span>
-          <span>${item.targetLang}</span>
+          <span>${escapeHtml(item.targetLang)}</span>
         </div>
         <span class="history-item-time">${timeStr}</span>
       </div>
