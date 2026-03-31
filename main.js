@@ -32,38 +32,42 @@ function decryptApiKey(text) {
 }
 
 async function initStores() {
-  const mod = await import('electron-store');
-  Store = mod.default;
+  try {
+    const mod = await import('electron-store');
+    Store = mod.default;
 
-  settingsStore = new Store({
-    name: 'settings',
-    defaults: {
-      apiKey: '',
-      hotkey: 'Ctrl+Shift+T',
-      windowBounds: { width: 860, height: 640 },
-      recentLanguages: ['en', 'ru', 'de', 'fr', 'es', 'uk', 'zh', 'ja', 'ko', 'ar'],
-      model: 'gemini-2.5-flash'
-    }
-  });
+    settingsStore = new Store({
+      name: 'settings',
+      defaults: {
+        apiKey: '',
+        hotkey: 'Ctrl+Shift+T',
+        windowBounds: { width: 860, height: 640 },
+        recentLanguages: ['en', 'ru', 'de', 'fr', 'es', 'uk', 'zh', 'ja', 'ko', 'ar'],
+        model: 'gemini-2.5-flash'
+      }
+    });
 
-  historyStore = new Store({
-    name: 'history',
-    defaults: {
-      items: []
+    historyStore = new Store({
+      name: 'history',
+      defaults: {
+        items: []
+      }
+    });
+
+    // Migrate legacy plaintext API key
+    const currentKey = settingsStore.get('apiKey');
+    if (currentKey && safeStorage.isEncryptionAvailable()) {
+      const decrypted = decryptApiKey(currentKey);
+      // If decrypted value equals the input, it means decryption failed (fallback) or wasn't needed,
+      // which implies it is currently stored as plaintext (or invalid).
+      if (decrypted === currentKey) {
+        console.log('Migrating API key to encrypted storage...');
+        settingsStore.set('apiKey', encryptApiKey(currentKey));
+      }
     }
-  });
-  // Migrate legacy plaintext API key
-  const currentKey = settingsStore.get('apiKey');
-  if (currentKey && safeStorage.isEncryptionAvailable()) {
-    const decrypted = decryptApiKey(currentKey);
-    // If decrypted value equals the input, it means decryption failed (fallback) or wasn't needed,
-    // which implies it is currently stored as plaintext (or invalid).
-    if (decrypted === currentKey) {
-      console.log('Migrating API key to encrypted storage...');
-      settingsStore.set('apiKey', encryptApiKey(currentKey));
-    }
+  } catch (err) {
+    console.error('Failed to initialize electron-store:', err);
   }
-
 }
 
 let mainWindow;
