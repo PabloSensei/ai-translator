@@ -1,38 +1,7 @@
-const { URL } = require('url');
-
-// Mock ipcMain and shell behavior
-const shell = {
-  openExternal: (url) => {
-    console.log(`[SUCCESS] Opening: ${url}`);
-    return Promise.resolve();
-  }
-};
-
-const ipcMain = {
-  on: (channel, handler) => {
-    // We store the handler to call it manually
-    global.handler = handler;
-  }
-};
-
-// Simulate the fixed logic
-// This logic will be copied into main.js
-ipcMain.on('open-external', async (event, url) => {
-  if (!url || typeof url !== 'string') return;
-  try {
-    const parsed = new URL(url);
-    if (['http:', 'https:'].includes(parsed.protocol)) {
-      await shell.openExternal(url);
-    } else {
-      console.warn(`[BLOCKED] Protocol not allowed: ${url}`);
-    }
-  } catch (err) {
-    console.warn(`[BLOCKED] Invalid URL: ${url}`);
-  }
-});
+const { isValidUrl } = require('../utils');
 
 // Run tests
-(async () => {
+(() => {
   console.log('--- Testing URL Validation Logic ---');
 
   const tests = [
@@ -48,36 +17,14 @@ ipcMain.on('open-external', async (event, url) => {
   ];
 
   let passed = true;
-  const originalLog = console.log;
-  const originalWarn = console.warn;
 
   for (const t of tests) {
-    let allowed = false;
-
-    // Mock console to capture output
-    console.log = (msg) => {
-      if (msg.includes('[SUCCESS]')) allowed = true;
-    };
-    console.warn = (msg) => {
-      if (msg.includes('[BLOCKED]')) allowed = false;
-    };
-
-    try {
-      await global.handler({}, t.input);
-    } catch (e) {
-      console.error(e);
-      allowed = false;
-    }
-
-    // Restore console
-    console.log = originalLog;
-    console.warn = originalWarn;
-
-    if (allowed !== t.expected) {
-      console.error(`FAILED: Input "${t.input}" -> Expected ${t.expected}, got ${allowed}`);
+    const result = isValidUrl(t.input);
+    if (result !== t.expected) {
+      console.error(`FAILED: Input "${t.input}" -> Expected ${t.expected}, got ${result}`);
       passed = false;
     } else {
-      console.log(`PASSED: Input "${t.input}" -> ${allowed ? 'Allowed' : 'Blocked'}`);
+      console.log(`PASSED: Input "${t.input}" -> ${result ? 'Allowed' : 'Blocked'}`);
     }
   }
 

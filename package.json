@@ -5,7 +5,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --win"
+    "build": "electron-builder --win",
+    "test": "node tests/ipc_security.test.js && node tests/recent_languages.test.js"
   },
   "build": {
     "appId": "com.ai.translator",

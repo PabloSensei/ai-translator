@@ -1,6 +1,7 @@
 const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, dialog, shell } = require('electron');
 const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { isValidUrl, updateRecentLanguagesList } = require('./utils');
 
 // electron-store — ESM-only module starting from v9, use dynamic import
 let Store;
@@ -277,30 +278,18 @@ function setupIPC() {
 
   // Opening links in browser
   ipcMain.on('open-external', async (event, url) => {
-    if (!url || typeof url !== 'string') return;
-    try {
-      const parsed = new URL(url);
-      if (['http:', 'https:'].includes(parsed.protocol)) {
-        await shell.openExternal(url);
-      } else {
-        console.warn(`Blocked potential security risk: ${url}`);
-      }
-    } catch (err) {
-      console.warn(`Invalid URL passed to open-external: ${url}`);
+    if (isValidUrl(url)) {
+      await shell.openExternal(url);
+    } else {
+      console.warn(`Blocked or invalid URL: ${url}`);
     }
   });
+}
 
 function updateRecentLanguages(source, target) {
   const recent = settingsStore.get('recentLanguages') || [];
-
-  // Move to start
-  const filtered = recent.filter(l => l !== source && l !== target);
-  filtered.unshift(target);
-  filtered.unshift(source);
-
-  // Max 10
-  if (filtered.length > 10) filtered.length = 10;
-  settingsStore.set('recentLanguages', filtered);
+  const updated = updateRecentLanguagesList(recent, source, target);
+  settingsStore.set('recentLanguages', updated);
 }
 
 // --- App lifecycle ---
