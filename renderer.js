@@ -418,7 +418,7 @@ async function loadHistory() {
         return;
     }
 
-    container.innerHTML = '';
+    const fragment = document.createDocumentFragment();
 
     items.forEach(item => {
         const el = document.createElement('div');
@@ -474,8 +474,11 @@ async function loadHistory() {
             }, 200);
         });
 
-        container.appendChild(el);
+        fragment.appendChild(el);
     });
+
+    container.innerHTML = '';
+    container.appendChild(fragment);
 }
 
 $('#btn-clear-history').addEventListener('click', async () => {
@@ -580,10 +583,10 @@ function showToast(message, type = 'info') {
 }
 
 // ===== Utilities =====
+const escapeDiv = document.createElement('div');
 function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    escapeDiv.textContent = text;
+    return escapeDiv.innerHTML;
 }
 
 // ===== Start =====
