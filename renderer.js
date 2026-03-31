@@ -1,3 +1,10 @@
+// ===== Утилиты =====
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // ===== Список языков =====
 const LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇬🇧' },
@@ -229,7 +236,11 @@ swapBtn.addEventListener('click', () => {
     if (currentTarget && !placeholder) {
         sourceText.value = currentTarget;
         const isSameLang = currentSourceLang === currentTargetLang;
-        targetText.innerHTML = tempText || `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+        if (tempText) {
+            targetText.textContent = tempText;
+        } else {
+            targetText.innerHTML = `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+        }
     }
 });
 
@@ -324,11 +335,11 @@ async function doTranslate() {
 
             showToast(isSameLang ? 'Text fixed successfully' : 'Translation successful', 'success');
         } else {
-            targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">${result.error}</span>`;
+            targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">${escapeHtml(result.error)}</span>`;
             showToast(result.error, 'error');
         }
     } catch (err) {
-        targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">Error: ${err.message}</span>`;
+        targetText.innerHTML = `<span class="placeholder" style="color: var(--error);">Error: ${escapeHtml(err.message)}</span>`;
         showToast(isSameLang ? 'Fixing error' : 'Translation error', 'error');
     } finally {
         isTranslating = false;
@@ -421,9 +432,9 @@ async function loadHistory() {
         el.innerHTML = `
       <div class="history-item-header">
         <div class="history-item-langs">
-          <span>${item.sourceLang}</span>
+          <span>${escapeHtml(item.sourceLang)}</span>
           <span class="arrow">→</span>
-          <span>${item.targetLang}</span>
+          <span>${escapeHtml(item.targetLang)}</span>
         </div>
         <span class="history-item-time">${timeStr}</span>
       </div>
@@ -565,13 +576,6 @@ function showToast(message, type = 'info') {
     setTimeout(() => {
         if (toast.parentNode) toast.remove();
     }, 3000);
-}
-
-// ===== Утилиты =====
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // ===== Запуск =====
