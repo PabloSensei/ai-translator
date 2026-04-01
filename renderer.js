@@ -45,6 +45,12 @@ let currentStyle = 'neutral'; // 'formal' | 'neutral' | 'casual'
 let isTranslating = false;
 let currentHotkey = 'Ctrl+Shift+T';
 
+// Language selection elements for O(1) access
+const sourceLangOptions = new Map();
+const targetLangOptions = new Map();
+let selectedSourceOpt = null;
+let selectedTargetOpt = null;
+
 // ===== DOM элементы =====
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -101,6 +107,15 @@ async function init() {
 function buildDropdown(container, type) {
     container.innerHTML = '';
 
+    // Reset maps and selected refs if container is being rebuilt
+    if (type === 'source') {
+        sourceLangOptions.clear();
+        selectedSourceOpt = null;
+    } else {
+        targetLangOptions.clear();
+        selectedTargetOpt = null;
+    }
+
     // Поиск
     const searchWrap = document.createElement('div');
     searchWrap.className = 'lang-dropdown-search';
@@ -114,11 +129,14 @@ function buildDropdown(container, type) {
     container.appendChild(searchWrap);
 
     // Опции
+    const map = type === 'source' ? sourceLangOptions : targetLangOptions;
     LANGUAGES.forEach(lang => {
         const option = document.createElement('div');
         option.className = 'lang-option';
         option.dataset.code = lang.code;
         option.innerHTML = `<span class="lang-flag">${lang.flag}</span>${lang.name}`;
+
+        map.set(lang.code, option);
 
         option.addEventListener('click', () => {
             if (type === 'source') {
@@ -151,13 +169,20 @@ function updateLangDisplay() {
     sourceLangLabel.textContent = source ? source.name : currentSourceLang;
     targetLangLabel.textContent = target ? target.name : currentTargetLang;
 
-    // Обновить selected состояние
-    sourceLangDropdown.querySelectorAll('.lang-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.dataset.code === currentSourceLang);
-    });
-    targetLangDropdown.querySelectorAll('.lang-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.dataset.code === currentTargetLang);
-    });
+    // Update selected state (O(1) optimization)
+    const newSourceOpt = sourceLangOptions.get(currentSourceLang);
+    if (newSourceOpt !== selectedSourceOpt) {
+        if (selectedSourceOpt) selectedSourceOpt.classList.remove('selected');
+        selectedSourceOpt = newSourceOpt;
+        if (selectedSourceOpt) selectedSourceOpt.classList.add('selected');
+    }
+
+    const newTargetOpt = targetLangOptions.get(currentTargetLang);
+    if (newTargetOpt !== selectedTargetOpt) {
+        if (selectedTargetOpt) selectedTargetOpt.classList.remove('selected');
+        selectedTargetOpt = newTargetOpt;
+        if (selectedTargetOpt) selectedTargetOpt.classList.add('selected');
+    }
 
     const isSameLang = currentSourceLang === currentTargetLang;
     if (!isTranslating) {
