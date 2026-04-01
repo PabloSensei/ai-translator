@@ -171,13 +171,29 @@ function registerHotkey() {
 }
 
 // --- Gemini API ---
+let cachedGenAI = null;
+let cachedModel = null;
+let currentApiKey = null;
+let currentModelName = null;
+
 async function translateText(text, sourceLang, targetLang, apiKey, style = 'neutral', modelName = 'gemini-2.5-flash') {
   if (!apiKey) {
     throw new Error('API key is not set. Please enter it in the settings.');
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: modelName });
+  // Optimize: reuse GoogleGenerativeAI and model instances
+  if (apiKey !== currentApiKey || !cachedGenAI) {
+    cachedGenAI = new GoogleGenerativeAI(apiKey);
+    currentApiKey = apiKey;
+    cachedModel = null; // Reset model if AI client changes
+  }
+
+  if (modelName !== currentModelName || !cachedModel) {
+    cachedModel = cachedGenAI.getGenerativeModel({ model: modelName });
+    currentModelName = modelName;
+  }
+
+  const model = cachedModel;
 
   let styleInstruction = '';
   if (style === 'formal') {
