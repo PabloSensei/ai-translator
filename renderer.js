@@ -38,6 +38,9 @@ const LANGUAGES = [
     { code: 'ka', name: 'ქართული', flag: '🇬🇪' },
 ];
 
+const LANGUAGES_BY_CODE = new Map(LANGUAGES.map(l => [l.code, l]));
+const LANGUAGES_BY_NAME = new Map(LANGUAGES.map(l => [l.name, l]));
+
 // ===== State =====
 let currentSourceLang = 'en';
 let currentTargetLang = 'ru';
@@ -157,8 +160,8 @@ function filterDropdown(container, query) {
 }
 
 function updateLangDisplay() {
-    const source = LANGUAGES.find(l => l.code === currentSourceLang);
-    const target = LANGUAGES.find(l => l.code === currentTargetLang);
+    const source = LANGUAGES_BY_CODE.get(currentSourceLang);
+    const target = LANGUAGES_BY_CODE.get(currentTargetLang);
 
     sourceLangLabel.textContent = source ? source.name : currentSourceLang;
     targetLangLabel.textContent = target ? target.name : currentTargetLang;
@@ -252,8 +255,8 @@ function renderRecentLanguages(recentCodes) {
     // Show pairs for quick selection
     const pairs = [];
     for (let i = 0; i < recentCodes.length - 1; i += 2) {
-        const src = LANGUAGES.find(l => l.code === recentCodes[i]);
-        const tgt = LANGUAGES.find(l => l.code === recentCodes[i + 1]);
+        const src = LANGUAGES_BY_CODE.get(recentCodes[i]);
+        const tgt = LANGUAGES_BY_CODE.get(recentCodes[i + 1]);
         if (src && tgt) {
             pairs.push({ src, tgt });
         }
@@ -262,7 +265,7 @@ function renderRecentLanguages(recentCodes) {
     // Also add individual languages as chips
     const uniqueCodes = [...new Set(recentCodes)].slice(0, 8);
     uniqueCodes.forEach(code => {
-        const lang = LANGUAGES.find(l => l.code === code);
+        const lang = LANGUAGES_BY_CODE.get(code);
         if (!lang) return;
 
         const chip = document.createElement('button');
@@ -317,8 +320,8 @@ async function doTranslate() {
     targetText.innerHTML = `<span class="placeholder">${actionText}</span>`;
 
     try {
-        const sourceLang = LANGUAGES.find(l => l.code === currentSourceLang)?.name || currentSourceLang;
-        const targetLang = LANGUAGES.find(l => l.code === currentTargetLang)?.name || currentTargetLang;
+        const sourceLang = LANGUAGES_BY_CODE.get(currentSourceLang)?.name || currentSourceLang;
+        const targetLang = LANGUAGES_BY_CODE.get(currentTargetLang)?.name || currentTargetLang;
 
         const result = await window.api.translate({
             text,
@@ -454,8 +457,8 @@ async function loadHistory() {
             targetText.textContent = item.targetText;
 
             // Find language codes by names
-            const src = LANGUAGES.find(l => l.name === item.sourceLang);
-            const tgt = LANGUAGES.find(l => l.name === item.targetLang);
+            const src = LANGUAGES_BY_NAME.get(item.sourceLang);
+            const tgt = LANGUAGES_BY_NAME.get(item.targetLang);
             if (src) currentSourceLang = src.code;
             if (tgt) currentTargetLang = tgt.code;
             updateLangDisplay();
