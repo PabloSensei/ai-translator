@@ -48,6 +48,12 @@ let currentStyle = 'neutral'; // 'formal' | 'neutral' | 'casual'
 let isTranslating = false;
 let currentHotkey = 'Ctrl+Shift+T';
 
+// Optimized DOM lookups for language selection
+const sourceLangOptions = new Map();
+const targetLangOptions = new Map();
+let selectedSourceOpt = null;
+let selectedTargetOpt = null;
+
 // ===== DOM Elements =====
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -103,6 +109,8 @@ async function init() {
 // ===== Dropdown Construction =====
 function buildDropdown(container, type) {
     container.innerHTML = '';
+    const optionsMap = type === 'source' ? sourceLangOptions : targetLangOptions;
+    optionsMap.clear();
 
     // Search
     const searchWrap = document.createElement('div');
@@ -134,6 +142,7 @@ function buildDropdown(container, type) {
             closeAllDropdowns();
         });
 
+        optionsMap.set(lang.code, option);
         fragment.appendChild(option);
     });
     container.appendChild(fragment);
@@ -168,13 +177,14 @@ function updateLangDisplay() {
     sourceLangLabel.textContent = source ? source.name : currentSourceLang;
     targetLangLabel.textContent = target ? target.name : currentTargetLang;
 
-    // Update selected state
-    sourceLangDropdown.querySelectorAll('.lang-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.dataset.code === currentSourceLang);
-    });
-    targetLangDropdown.querySelectorAll('.lang-option').forEach(opt => {
-        opt.classList.toggle('selected', opt.dataset.code === currentTargetLang);
-    });
+    // Update selected state (O(1) optimization)
+    if (selectedSourceOpt) selectedSourceOpt.classList.remove('selected');
+    selectedSourceOpt = sourceLangOptions.get(currentSourceLang);
+    if (selectedSourceOpt) selectedSourceOpt.classList.add('selected');
+
+    if (selectedTargetOpt) selectedTargetOpt.classList.remove('selected');
+    selectedTargetOpt = targetLangOptions.get(currentTargetLang);
+    if (selectedTargetOpt) selectedTargetOpt.classList.add('selected');
 
     const isSameLang = currentSourceLang === currentTargetLang;
     if (!isTranslating) {
