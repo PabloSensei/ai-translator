@@ -33,7 +33,8 @@
     "linux": {
       "target": ["AppImage", "deb"],
       "icon": "assets/icon.png",
-      "category": "Utility"
+      "category": "Utility",
+      "maintainer": "PabloSensei"
     },
     "mac": {
       "target": "dmg",
