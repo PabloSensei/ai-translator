@@ -14,11 +14,11 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         include:
           - os: ubuntu-latest
-            build_cmd: npm run build:linux
+            build_cmd: npx electron-builder --linux --publish never
           - os: macos-latest
-            build_cmd: npm run build:mac
+            build_cmd: npx electron-builder --mac --publish never
           - os: windows-latest
-            build_cmd: npm run build:win
+            build_cmd: npx electron-builder --win --publish never
 
     steps:
       - uses: actions/checkout@v4
