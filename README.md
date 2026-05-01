@@ -46,7 +46,19 @@
 - [Node.js](https://nodejs.org/) 18+ 
 - [Google Gemini](https://aistudio.google.com/apikey) API Key
 
-### Steps
+### Pre-built Release (recommended)
+
+Download the latest version from [Releases](https://github.com/PabloSensei/ai-translator/releases):
+
+| Platform | Package |
+|----------|---------|
+| 🪟 **Windows** | `AI Translator Setup 1.0.0.exe` |
+| 🍏 **macOS** | `AI Translator-1.0.0-arm64.dmg` |
+| 🐧 **Linux** | `AI Translator-1.0.0.AppImage` or `.deb` |
+
+After downloading, install and launch — no Node.js or npm required.
+
+### Build from Source
 
 1. **Clone the repository:**
 
