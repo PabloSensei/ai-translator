@@ -1,6 +1,6 @@
 {
   "name": "ai-translator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Desktop translator powered by Google Gemini AI with 30+ languages and multiple translation styles",
   "main": "main.js",
   "scripts": {
