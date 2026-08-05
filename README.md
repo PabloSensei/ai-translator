@@ -12,6 +12,11 @@
 [![Gemini AI](https://img.shields.io/badge/Gemini_AI-2.5_Flash-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non--Commercial-A855F7)](LICENSE)
 
+[![Release](https://img.shields.io/github/v/release/PabloSensei/ai-translator)](https://github.com/PabloSensei/ai-translator/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/PabloSensei/ai-translator/total)](https://github.com/PabloSensei/ai-translator/releases)
+[![Stars](https://img.shields.io/github/stars/PabloSensei/ai-translator)](https://github.com/PabloSensei/ai-translator/stargazers)
+[![Build](https://github.com/PabloSensei/ai-translator/actions/workflows/release.yml/badge.svg)](https://github.com/PabloSensei/ai-translator/actions/workflows/release.yml)
+
 </div>
 
 ---
