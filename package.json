@@ -1,11 +1,11 @@
 {
   "name": "ai-translator",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Desktop translator powered by Google Gemini AI with 30+ languages and multiple translation styles",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node tests/ipc_security.test.js",
+    "test": "node tests/ipc_security.test.js && node tests/escape_html.test.js && node tests/recent_pairs.test.js && node tests/prompt_and_version.test.js && node tests/settings_validation.test.js && node tests/model_filter.test.js",
     "build": "electron-builder --linux --win",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
@@ -21,6 +21,7 @@
       "main.js",
       "preload.js",
       "renderer.js",
+      "theme-init.js",
       "utils.js",
       "index.html",
       "styles.css",
@@ -31,7 +32,10 @@
       "icon": "assets/icon.png"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "icon": "assets/icon.png",
       "category": "Utility",
       "maintainer": "PabloSensei"
@@ -57,7 +61,10 @@
     "electron-store": "^11.0.2"
   },
   "devDependencies": {
-    "electron": "^40.6.0",
-    "electron-builder": "^26.8.1"
+    "electron": "^44.3.0",
+    "electron-builder": "^26.16.1"
+  },
+  "allowScripts": {
+    "electron@44.3.0": true
   }
 }

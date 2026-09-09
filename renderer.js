@@ -1,4 +1,9 @@
+// The saved theme is applied ahead of the first paint by theme-init.js.
+
 // ===== Language List =====
+// 'auto' is source-only and always sits at the top of the source dropdown.
+const AUTO_LANG = { code: 'auto', name: 'Detect language', flag: '🌐' };
+
 const LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇬🇧' },
     { code: 'ru', name: 'Russian', flag: '🇷🇺' },
@@ -38,15 +43,34 @@ const LANGUAGES = [
     { code: 'ka', name: 'ქართული', flag: '🇬🇪' },
 ];
 
-const LANGUAGES_BY_CODE = new Map(LANGUAGES.map(l => [l.code, l]));
-const LANGUAGES_BY_NAME = new Map(LANGUAGES.map(l => [l.name, l]));
+const LANGUAGES_BY_CODE = new Map([[AUTO_LANG.code, AUTO_LANG], ...LANGUAGES.map(l => [l.code, l])]);
+const LANGUAGES_BY_NAME = new Map([[AUTO_LANG.name, AUTO_LANG], ...LANGUAGES.map(l => [l.name, l])]);
+
+// ===== Built-in Styles =====
+// Ids must match STYLE_INSTRUCTIONS in main.js, which holds the actual prompt wording.
+const BUILTIN_STYLES = [
+    { id: 'neutral', name: 'Neutral' },
+    { id: 'formal', name: 'Formal' },
+    { id: 'casual', name: 'Casual' },
+    { id: 'technical', name: 'Technical' },
+    { id: 'academic', name: 'Academic' },
+    { id: 'creative', name: 'Creative' },
+    { id: 'concise', name: 'Concise' },
+    { id: 'simple', name: 'Simple' },
+    { id: 'marketing', name: 'Marketing' },
+    { id: 'polite', name: 'Polite' }
+];
 
 // ===== State =====
-let currentSourceLang = 'en';
+let currentSourceLang = 'auto';
 let currentTargetLang = 'ru';
-let currentStyle = 'neutral'; // 'formal' | 'neutral' | 'casual'
+let currentStyle = 'neutral';
+let currentMode = 'translate'; // 'translate' | 'fix'
+let customStyles = [];
 let isTranslating = false;
 let currentHotkey = 'Ctrl+Shift+T';
+let currentTheme = 'dark';
+let openRouterModels = [];
 
 // Optimized DOM lookups for language selection
 const sourceLangOptions = new Map();
@@ -70,41 +94,77 @@ const targetText = $('#target-text');
 const translateBtn = $('#btn-translate');
 const loader = $('#loader');
 const recentLangsContainer = $('#recent-langs');
+const styleSelector = $('#style-selector');
+const modeSwitch = $('#mode-switch');
+const targetLangSelector = $('#target-lang-selector');
 
 // ===== Initialization =====
 async function init() {
     const settings = await window.api.getSettings();
 
-    // Set API key if present
-    if (settings.apiKey) {
-        $('#api-key-input').value = settings.apiKey;
-    }
+    applyTheme(settings.theme, settings.resolvedTheme);
+    $('#theme-select').value = settings.theme || 'dark';
+
+    if (settings.apiKey) $('#api-key-input').value = settings.apiKey;
+    if (settings.openrouterApiKey) $('#openrouter-key-input').value = settings.openrouterApiKey;
 
     if (settings.hotkey) {
         currentHotkey = settings.hotkey;
         $('#hotkey-input').value = settings.hotkey;
     }
 
-    if (settings.model) {
-        $('#model-select').value = settings.model;
+    $('#provider-select').value = settings.provider || 'gemini';
+    updateProviderSections();
+
+    populateGeminiModels(settings.defaultGeminiModels || [], settings.model);
+    setOpenRouterModel(settings.openrouterModel);
+
+    $('#app-version').textContent = `v${settings.version || ''}`;
+
+    customStyles = settings.customStyles || [];
+    currentStyle = settings.style || 'neutral';
+    renderStyles();
+
+    // Restore the most recent language pair, if there is one.
+    const recentPairs = settings.recentPairs || [];
+    if (recentPairs.length) {
+        currentSourceLang = recentPairs[0].source;
+        currentTargetLang = recentPairs[0].target;
     }
 
-    // Create language dropdowns
     buildDropdown(sourceLangDropdown, 'source');
     buildDropdown(targetLangDropdown, 'target');
 
-    // Update language display
     updateLangDisplay();
-
-    // Recent languages
-    renderRecentLanguages(settings.recentLanguages || []);
-
-    // Load history
+    renderRecentPairs(recentPairs);
     loadHistory();
 
-    // Translation style
-    initStyleSelector();
+    window.api.onSystemThemeChanged((resolved) => {
+        if (currentTheme === 'system') applyTheme('system', resolved);
+    });
 }
+
+// ===== Theme =====
+function applyTheme(theme, resolved) {
+    currentTheme = theme || 'dark';
+    const effective = resolved || (theme === 'light' ? 'light' : 'dark');
+    document.documentElement.setAttribute('data-theme', effective);
+    document.documentElement.dataset.themeSetting = currentTheme;
+}
+
+async function setTheme(theme) {
+    const result = await window.api.saveSettings({ theme });
+    applyTheme(theme, result.resolvedTheme);
+    $('#theme-select').value = theme;
+}
+
+$('#btn-theme').addEventListener('click', () => {
+    // Direct toggle: whatever is on screen now, flip it to the other one.
+    const effective = document.documentElement.getAttribute('data-theme');
+    setTheme(effective === 'dark' ? 'light' : 'dark');
+});
+
+$('#theme-select').addEventListener('change', (e) => setTheme(e.target.value));
 
 // ===== Dropdown Construction =====
 function buildDropdown(container, type) {
@@ -124,13 +184,20 @@ function buildDropdown(container, type) {
     searchWrap.appendChild(searchInput);
     container.appendChild(searchWrap);
 
-    // Options
+    // Options — "Detect language" is offered for the source side only.
+    const list = type === 'source' ? [AUTO_LANG, ...LANGUAGES] : LANGUAGES;
     const fragment = document.createDocumentFragment();
-    LANGUAGES.forEach(lang => {
+    list.forEach(lang => {
         const option = document.createElement('div');
         option.className = 'lang-option';
+        if (lang.code === 'auto') option.classList.add('lang-option-auto');
         option.dataset.code = lang.code;
-        option.innerHTML = `<span class="lang-flag">${lang.flag}</span>${lang.name}`;
+
+        const flag = document.createElement('span');
+        flag.className = 'lang-flag';
+        flag.textContent = lang.flag;
+        option.appendChild(flag);
+        option.appendChild(document.createTextNode(lang.name));
 
         option.addEventListener('click', () => {
             if (type === 'source') {
@@ -170,12 +237,14 @@ function filterDropdown(container, query) {
     });
 }
 
-function updateLangDisplay() {
-    const source = LANGUAGES_BY_CODE.get(currentSourceLang);
-    const target = LANGUAGES_BY_CODE.get(currentTargetLang);
+function langName(code) {
+    const lang = LANGUAGES_BY_CODE.get(code);
+    return lang ? lang.name : code;
+}
 
-    sourceLangLabel.textContent = source ? source.name : currentSourceLang;
-    targetLangLabel.textContent = target ? target.name : currentTargetLang;
+function updateLangDisplay() {
+    sourceLangLabel.textContent = langName(currentSourceLang);
+    targetLangLabel.textContent = langName(currentTargetLang);
 
     // Update selected state (O(1) optimization)
     if (selectedSourceOpt) selectedSourceOpt.classList.remove('selected');
@@ -186,17 +255,44 @@ function updateLangDisplay() {
     selectedTargetOpt = targetLangOptions.get(currentTargetLang);
     if (selectedTargetOpt) selectedTargetOpt.classList.add('selected');
 
-    const isSameLang = currentSourceLang === currentTargetLang;
+    updateActionLabels();
+}
+
+function updateActionLabels() {
+    const isFix = currentMode === 'fix';
     if (!isTranslating) {
-        translateBtn.querySelector('.translate-btn-text').textContent = isSameLang ? 'Fix Errors' : 'Translate';
+        translateBtn.querySelector('.translate-btn-text').textContent = isFix ? 'Fix Text' : 'Translate';
     }
 
-    // Update placeholder if present
+    sourceText.placeholder = isFix ? 'Enter text to fix...' : 'Enter text to translate...';
+
     const placeholder = targetText.querySelector('.placeholder');
     if (placeholder && !isTranslating) {
-        placeholder.textContent = isSameLang ? 'Corrected text will appear here...' : 'Translation will appear here...';
+        placeholder.textContent = isFix
+            ? 'Corrected text will appear here...'
+            : 'Translation will appear here...';
     }
 }
+
+// ===== Mode Switch (Translate <-> Fix text) =====
+function setMode(mode) {
+    currentMode = mode === 'fix' ? 'fix' : 'translate';
+    modeSwitch.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === currentMode);
+    });
+
+    // Fixing keeps the original language, so the target side is irrelevant.
+    const isFix = currentMode === 'fix';
+    swapBtn.hidden = isFix;
+    targetLangSelector.hidden = isFix;
+    recentLangsContainer.hidden = isFix;
+    updateActionLabels();
+}
+
+modeSwitch.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-btn');
+    if (btn) setMode(btn.dataset.mode);
+});
 
 // ===== Dropdown Open/Close =====
 function toggleDropdown(btn, dropdown) {
@@ -238,6 +334,12 @@ document.addEventListener('click', (e) => {
 
 // ===== Swap =====
 swapBtn.addEventListener('click', () => {
+    // "Detect language" has no counterpart to swap into.
+    if (currentSourceLang === 'auto') {
+        showToast('Pick a source language to swap', 'info');
+        return;
+    }
+
     // Animation
     swapBtn.classList.add('swapping');
     setTimeout(() => swapBtn.classList.remove('swapping'), 400);
@@ -255,64 +357,163 @@ swapBtn.addEventListener('click', () => {
 
     if (currentTarget && !placeholder) {
         sourceText.value = currentTarget;
-        const isSameLang = currentSourceLang === currentTargetLang;
         if (tempText) {
             targetText.textContent = tempText;
         } else {
-            targetText.innerHTML = `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+            resetTargetPlaceholder();
         }
     }
 });
 
-// ===== Recent Languages =====
-function renderRecentLanguages(recentCodes) {
+function resetTargetPlaceholder() {
+    targetText.innerHTML = '';
+    const span = document.createElement('span');
+    span.className = 'placeholder';
+    span.textContent = currentMode === 'fix'
+        ? 'Corrected text will appear here...'
+        : 'Translation will appear here...';
+    targetText.appendChild(span);
+}
+
+// ===== Recently Used Language Pairs =====
+function renderRecentPairs(pairs) {
     recentLangsContainer.innerHTML = '';
 
-    // Show pairs for quick selection
-    const pairs = [];
-    for (let i = 0; i < recentCodes.length - 1; i += 2) {
-        const src = LANGUAGES_BY_CODE.get(recentCodes[i]);
-        const tgt = LANGUAGES_BY_CODE.get(recentCodes[i + 1]);
-        if (src && tgt) {
-            pairs.push({ src, tgt });
-        }
+    if (!pairs || !pairs.length) {
+        const hint = document.createElement('span');
+        hint.className = 'recent-empty';
+        hint.textContent = 'Recently used language pairs will appear here';
+        recentLangsContainer.appendChild(hint);
+        return;
     }
 
-    // Also add individual languages as chips
-    const uniqueCodes = [...new Set(recentCodes)].slice(0, 8);
     const fragment = document.createDocumentFragment();
-    uniqueCodes.forEach(code => {
-        const lang = LANGUAGES_BY_CODE.get(code);
-        if (!lang) return;
+    pairs.forEach(pair => {
+        const src = LANGUAGES_BY_CODE.get(pair.source);
+        const tgt = LANGUAGES_BY_CODE.get(pair.target);
+        if (!src || !tgt) return;
 
         const chip = document.createElement('button');
         chip.className = 'recent-chip';
-        chip.textContent = `${lang.flag} ${lang.name}`;
+        // Codes only: Windows renders flag emoji as their regional-indicator
+        // letters ("pl"), which just duplicates the code next to it.
+        chip.title = `${src.name} → ${tgt.name}`;
+        chip.textContent = `${src.code === 'auto' ? 'Auto' : src.code.toUpperCase()} → ${tgt.code.toUpperCase()}`;
+
+        if (pair.source === currentSourceLang && pair.target === currentTargetLang) {
+            chip.classList.add('active');
+        }
+
         chip.addEventListener('click', () => {
-            // If it is current source — set as target, otherwise as source
-            if (currentSourceLang === code) {
-                currentTargetLang = code;
-            } else {
-                currentSourceLang = code;
-            }
+            currentSourceLang = pair.source;
+            currentTargetLang = pair.target;
             updateLangDisplay();
+            renderRecentPairs(pairs);
         });
         fragment.appendChild(chip);
     });
     recentLangsContainer.appendChild(fragment);
 }
 
-// ===== Translation Style =====
-function initStyleSelector() {
-    const styleBtns = document.querySelectorAll('.style-btn');
-    styleBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-            styleBtns.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            currentStyle = btn.dataset.style;
-        });
+// ===== Translation Styles =====
+function renderStyles() {
+    styleSelector.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    const all = [...BUILTIN_STYLES, ...customStyles];
+    // A deleted custom style should not leave the selector without a selection.
+    if (!all.some(s => s.id === currentStyle)) currentStyle = 'neutral';
+
+    all.forEach(style => {
+        const btn = document.createElement('button');
+        btn.className = 'style-btn';
+        btn.dataset.style = style.id;
+        btn.title = style.instruction || `${style.name} style`;
+        if (style.id === currentStyle) btn.classList.add('active');
+
+        const label = document.createElement('span');
+        label.textContent = style.name;
+        btn.appendChild(label);
+
+        btn.addEventListener('click', () => selectStyle(style.id));
+
+        if (style.id.startsWith('custom-')) {
+            btn.classList.add('style-btn-custom');
+            const del = document.createElement('span');
+            del.className = 'style-delete';
+            del.textContent = '×';
+            del.title = 'Delete this style';
+            del.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteCustomStyle(style.id);
+            });
+            btn.appendChild(del);
+        }
+
+        fragment.appendChild(btn);
     });
+
+    // "+ Custom" opener
+    const addBtn = document.createElement('button');
+    addBtn.className = 'style-btn style-btn-add';
+    addBtn.textContent = '+ Custom';
+    addBtn.title = 'Define your own translation style';
+    addBtn.addEventListener('click', () => {
+        const editor = $('#custom-style-editor');
+        editor.hidden = !editor.hidden;
+        if (!editor.hidden) $('#custom-style-name').focus();
+    });
+    fragment.appendChild(addBtn);
+
+    styleSelector.appendChild(fragment);
 }
+
+async function selectStyle(id) {
+    currentStyle = id;
+    renderStyles();
+    await window.api.saveSettings({ style: id });
+}
+
+async function persistCustomStyles() {
+    await window.api.saveSettings({ customStyles, style: currentStyle });
+}
+
+async function addCustomStyle() {
+    const name = $('#custom-style-name').value.trim();
+    const instruction = $('#custom-style-instruction').value.trim();
+
+    if (!name || !instruction) {
+        showToast('Give the style a name and an instruction', 'error');
+        return;
+    }
+
+    const style = { id: `custom-${Date.now()}`, name, instruction };
+    customStyles.push(style);
+    currentStyle = style.id;
+
+    $('#custom-style-name').value = '';
+    $('#custom-style-instruction').value = '';
+    $('#custom-style-editor').hidden = true;
+
+    renderStyles();
+    await persistCustomStyles();
+    showToast(`Style "${name}" added`, 'success');
+}
+
+async function deleteCustomStyle(id) {
+    customStyles = customStyles.filter(s => s.id !== id);
+    if (currentStyle === id) currentStyle = 'neutral';
+    renderStyles();
+    await persistCustomStyles();
+}
+
+$('#btn-save-custom-style').addEventListener('click', addCustomStyle);
+$('#btn-cancel-custom-style').addEventListener('click', () => {
+    $('#custom-style-editor').hidden = true;
+});
+$('#custom-style-instruction').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addCustomStyle();
+});
 
 // ===== Translation =====
 translateBtn.addEventListener('click', doTranslate);
@@ -327,42 +528,48 @@ async function doTranslate() {
     const text = sourceText.value.trim();
     if (!text || isTranslating) return;
 
-    const isSameLang = currentSourceLang === currentTargetLang;
-    const actionText = isSameLang ? 'Fixing...' : 'Translating...';
-    const btnText = isSameLang ? 'Fix Errors' : 'Translate';
+    const isFix = currentMode === 'fix';
+    const actionText = isFix ? 'Fixing...' : 'Translating...';
+    const btnText = isFix ? 'Fix Text' : 'Translate';
 
     isTranslating = true;
     translateBtn.disabled = true;
     translateBtn.querySelector('.translate-btn-text').textContent = actionText;
     loader.style.display = 'flex';
-    targetText.innerHTML = `<span class="placeholder">${actionText}</span>`;
+    targetText.innerHTML = '';
+    const pending = document.createElement('span');
+    pending.className = 'placeholder';
+    pending.textContent = actionText;
+    targetText.appendChild(pending);
 
     try {
-        const sourceLang = LANGUAGES_BY_CODE.get(currentSourceLang)?.name || currentSourceLang;
-        const targetLang = LANGUAGES_BY_CODE.get(currentTargetLang)?.name || currentTargetLang;
-
         const result = await window.api.translate({
             text,
-            sourceLang,
-            targetLang,
-            style: currentStyle
+            sourceLang: currentSourceLang === 'auto' ? 'auto' : langName(currentSourceLang),
+            targetLang: langName(currentTargetLang),
+            style: currentStyle,
+            mode: currentMode
         });
 
         if (result.success) {
             targetText.textContent = result.translated;
 
-            // Update recent
-            const recent = await window.api.getRecentLanguages();
-            renderRecentLanguages(recent);
+            if (!isFix) {
+                const res = await window.api.addRecentPair({
+                    source: currentSourceLang,
+                    target: currentTargetLang
+                });
+                renderRecentPairs(res.pairs);
+            }
 
-            showToast(isSameLang ? 'Text fixed successfully' : 'Translation successful', 'success');
+            showToast(isFix ? 'Text fixed successfully' : 'Translation successful', 'success');
         } else {
-            targetText.innerHTML = `<span class="placeholder error-text">${escapeHtml(result.error)}</span>`;
+            showError(result.error);
             showToast(result.error, 'error');
         }
     } catch (err) {
-        targetText.innerHTML = `<span class="placeholder error-text">Error: ${escapeHtml(err.message)}</span>`;
-        showToast(isSameLang ? 'Fixing error' : 'Translation error', 'error');
+        showError(`Error: ${err.message}`);
+        showToast(isFix ? 'Fixing error' : 'Translation error', 'error');
     } finally {
         isTranslating = false;
         translateBtn.disabled = false;
@@ -371,11 +578,18 @@ async function doTranslate() {
     }
 }
 
+function showError(message) {
+    targetText.innerHTML = '';
+    const span = document.createElement('span');
+    span.className = 'placeholder error-text';
+    span.textContent = message;
+    targetText.appendChild(span);
+}
+
 // ===== Text Actions =====
 $('#btn-clear').addEventListener('click', () => {
     sourceText.value = '';
-    const isSameLang = currentSourceLang === currentTargetLang;
-    targetText.innerHTML = `<span class="placeholder">${isSameLang ? 'Corrected text' : 'Translation'} will appear here...</span>`;
+    resetTargetPlaceholder();
     sourceText.focus();
 });
 
@@ -452,13 +666,15 @@ async function loadHistory() {
             hour: '2-digit', minute: '2-digit'
         });
 
+        const langs = item.mode === 'fix'
+            ? `<span>Fix</span><span class="arrow">·</span><span>${escapeHtml(item.sourceLang === 'auto' ? 'Auto' : item.sourceLang)}</span>`
+            : `<span>${escapeHtml(item.sourceLang === 'auto' ? 'Auto' : item.sourceLang)}</span>
+         <span class="arrow">→</span>
+         <span>${escapeHtml(item.targetLang)}</span>`;
+
         el.innerHTML = `
       <div class="history-item-header">
-        <div class="history-item-langs">
-          <span>${escapeHtml(item.sourceLang)}</span>
-          <span class="arrow">→</span>
-          <span>${escapeHtml(item.targetLang)}</span>
-        </div>
+        <div class="history-item-langs">${langs}</div>
         <span class="history-item-time">${timeStr}</span>
       </div>
       <div class="history-item-source">${escapeHtml(item.sourceText)}</div>
@@ -475,8 +691,10 @@ async function loadHistory() {
             sourceText.value = item.sourceText;
             targetText.textContent = item.targetText;
 
+            setMode(item.mode === 'fix' ? 'fix' : 'translate');
+
             // Find language codes by names
-            const src = LANGUAGES_BY_NAME.get(item.sourceLang);
+            const src = item.sourceLang === 'auto' ? AUTO_LANG : LANGUAGES_BY_NAME.get(item.sourceLang);
             const tgt = LANGUAGES_BY_NAME.get(item.targetLang);
             if (src) currentSourceLang = src.code;
             if (tgt) currentTargetLang = tgt.code;
@@ -507,9 +725,109 @@ $('#btn-clear-history').addEventListener('click', async () => {
     showToast('History cleared', 'info');
 });
 
-// ===== Settings =====
+// ===== Settings: provider & models =====
+function updateProviderSections() {
+    const provider = $('#provider-select').value;
+    $('#provider-gemini').hidden = provider !== 'gemini';
+    $('#provider-openrouter').hidden = provider !== 'openrouter';
+}
+
+$('#provider-select').addEventListener('change', updateProviderSections);
+
+function populateGeminiModels(models, selected) {
+    const select = $('#model-select');
+    select.innerHTML = '';
+
+    // Keep a saved model selectable even if it is missing from the fetched list.
+    const list = [...models];
+    if (selected && !list.some(m => m.id === selected)) {
+        list.unshift({ id: selected, name: `${selected} (saved)` });
+    }
+
+    list.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.id;
+        option.textContent = model.name;
+        select.appendChild(option);
+    });
+
+    if (selected) select.value = selected;
+}
+
+$('#btn-refresh-gemini-models').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+    try {
+        const selected = $('#model-select').value;
+        const result = await window.api.listModels('gemini');
+        populateGeminiModels(result.models || [], selected);
+        showToast(result.success ? `Loaded ${result.models.length} models` : result.error, result.success ? 'success' : 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Refresh';
+    }
+});
+
+function setOpenRouterModel(modelId) {
+    const label = $('#openrouter-model-current');
+    label.textContent = modelId ? `Selected: ${modelId}` : 'No model selected yet';
+    label.dataset.modelId = modelId || '';
+}
+
+function renderOpenRouterModels(filter = '') {
+    const select = $('#openrouter-model-select');
+    const q = filter.trim().toLowerCase();
+    const selected = $('#openrouter-model-current').dataset.modelId;
+
+    select.innerHTML = '';
+    const fragment = document.createDocumentFragment();
+
+    openRouterModels
+        .filter(m => !q || m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q))
+        .slice(0, 400)
+        .forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = `${model.name} — ${model.id}`;
+            if (model.id === selected) option.selected = true;
+            fragment.appendChild(option);
+        });
+
+    select.appendChild(fragment);
+}
+
+$('#btn-refresh-openrouter-models').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    btn.textContent = 'Loading...';
+    try {
+        const result = await window.api.listModels('openrouter');
+        if (result.success) {
+            openRouterModels = result.models;
+            renderOpenRouterModels($('#openrouter-model-filter').value);
+            showToast(`Loaded ${openRouterModels.length} models`, 'success');
+        } else {
+            showToast(result.error, 'error');
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Load models';
+    }
+});
+
+$('#openrouter-model-filter').addEventListener('input', (e) => renderOpenRouterModels(e.target.value));
+
+$('#openrouter-model-select').addEventListener('change', (e) => setOpenRouterModel(e.target.value));
+
+// ===== Settings: keys, hotkey, save =====
 $('#toggle-api-key').addEventListener('click', () => {
     const input = $('#api-key-input');
+    input.type = input.type === 'password' ? 'text' : 'password';
+});
+
+$('#toggle-openrouter-key').addEventListener('click', () => {
+    const input = $('#openrouter-key-input');
     input.type = input.type === 'password' ? 'text' : 'password';
 });
 
@@ -561,16 +879,21 @@ $('#hotkey-input').addEventListener('keydown', function (e) {
 
 $('#btn-save-settings').addEventListener('click', async () => {
     const apiKey = $('#api-key-input').value.trim();
+    const openrouterApiKey = $('#openrouter-key-input').value.trim();
     const hotkey = $('#hotkey-input').value.trim();
     const model = $('#model-select').value;
+    const openrouterModel = $('#openrouter-model-current').dataset.modelId;
+    const provider = $('#provider-select').value;
 
-    const settings = {};
+    const settings = { provider };
     if (apiKey) settings.apiKey = apiKey;
+    if (openrouterApiKey) settings.openrouterApiKey = openrouterApiKey;
     if (hotkey && hotkey !== 'Press a key combination...') {
         settings.hotkey = hotkey;
         currentHotkey = hotkey;
     }
     if (model) settings.model = model;
+    if (openrouterModel) settings.openrouterModel = openrouterModel;
 
     const result = await window.api.saveSettings(settings);
     if (result.success) {
@@ -581,6 +904,57 @@ $('#btn-save-settings').addEventListener('click', async () => {
 $('#link-aistudio').addEventListener('click', (e) => {
     e.preventDefault();
     window.api.openExternal('https://aistudio.google.com/apikey');
+});
+
+$('#link-openrouter').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.api.openExternal('https://openrouter.ai/keys');
+});
+
+$('#link-repo').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.api.openExternal('https://github.com/PabloSensei/ai-translator');
+});
+
+// ===== Updates =====
+$('#btn-check-updates').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const status = $('#update-status');
+
+    btn.disabled = true;
+    btn.textContent = 'Checking...';
+    status.className = 'update-status';
+    status.textContent = '';
+
+    try {
+        const result = await window.api.checkForUpdates();
+
+        if (!result.success) {
+            status.classList.add('error-text');
+            status.textContent = `Update check failed: ${result.error}`;
+            return;
+        }
+
+        if (result.updateAvailable) {
+            status.classList.add('update-available');
+            status.textContent = `Version ${result.latestVersion} is available (you have ${result.currentVersion}). `;
+
+            const link = document.createElement('a');
+            link.href = '#';
+            link.textContent = 'Open the download page';
+            link.addEventListener('click', (ev) => {
+                ev.preventDefault();
+                window.api.openExternal('https://github.com/PabloSensei/ai-translator/releases/latest');
+            });
+            status.appendChild(link);
+            showToast(`Update available: v${result.latestVersion}`, 'info');
+        } else {
+            status.textContent = result.note || `You are on the latest version (${result.currentVersion}).`;
+        }
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Check for updates';
+    }
 });
 
 // ===== Window Management =====
