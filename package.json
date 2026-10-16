@@ -1,6 +1,6 @@
 {
   "name": "ai-translator",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Desktop translator powered by Google Gemini, Anthropic Claude or OpenRouter, with 30+ languages and multiple translation styles",
   "main": "main.js",
   "scripts": {
@@ -15,6 +15,7 @@
     "appId": "com.ai.translator",
     "productName": "AI Translator",
     "artifactName": "AI-Translator-${version}-${arch}.${ext}",
+    "npmRebuild": false,
     "directories": {
       "output": "dist"
     },
@@ -81,7 +82,8 @@
     "@anthropic-ai/sdk": "^0.135.0",
     "@google/genai": "^2.30.0",
     "electron-store": "^12.0.0",
-    "electron-updater": "^6.8.9"
+    "electron-updater": "^6.8.9",
+    "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
     "electron": "^44.8.0",

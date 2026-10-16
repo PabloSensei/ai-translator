@@ -85,9 +85,9 @@ async function init() {
     if (typeof settings.selectionHotkey === 'string') savedHotkeys.selectionHotkey = settings.selectionHotkey;
     $('#hotkey-input').value = savedHotkeys.hotkey;
     $('#selection-hotkey-input').value = savedHotkeys.selectionHotkey;
-    // Only Linux exposes the highlighted text directly (PRIMARY selection).
-    if (window.api.platform === 'linux') {
-        $('#selection-hotkey-hint').textContent = 'Translates the highlighted text (or the clipboard). Backspace disables it';
+    // macOS needs a permission before the app may press Cmd+C for the user.
+    if (window.api.platform === 'darwin') {
+        $('#selection-hotkey-hint').textContent = 'Select text in any app and press this to translate it (needs the Accessibility permission). Backspace disables it';
     }
 
     $('#provider-select').value = settings.provider || 'gemini';
