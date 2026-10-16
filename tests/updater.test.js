@@ -90,3 +90,17 @@ test('describeUpdateError explains the common failures', () => {
   assert.strictEqual(describeUpdateError(new Error('first line\nstack')), 'first line');
   assert.strictEqual(describeUpdateError(undefined), 'Unknown error');
 });
+
+test('where the app cannot install updates, it only announces them', async () => {
+  const updater = fakeUpdater();
+  const u = createUpdater({ updater, currentVersion: '1.1.0', autoDownload: true, canInstall: false });
+  assert.strictEqual(updater.autoDownload, false);
+  const status = await u.check();
+  assert.deepStrictEqual(status, { currentVersion: '1.1.0', state: 'available', version: '1.2.0', percent: 0, manual: true });
+
+  u.setAutoDownload(true);
+  assert.strictEqual(updater.autoDownload, false);
+  await u.download();
+  assert.deepStrictEqual(updater.calls, ['check'], 'never downloads');
+  assert.strictEqual(u.install(), false);
+});

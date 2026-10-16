@@ -997,6 +997,7 @@ function renderEmptyHistory(container, message) {
 }
 
 const STAR_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+const IMAGE_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
 const DELETE_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
 function renderHistory() {
@@ -1047,7 +1048,7 @@ function renderHistory() {
           <button class="history-item-delete" title="Delete">${DELETE_ICON}</button>
         </div>
       </div>
-      <div class="history-item-source">${item.image ? '<span class="history-item-image">🖼 Text from an image</span>' : highlightMatches(item.sourceText, query)}</div>
+      <div class="history-item-source">${item.image ? `<span class="history-item-image">${IMAGE_ICON}Text from an image</span>` : highlightMatches(item.sourceText, query)}</div>
       <div class="history-item-target">${highlightMatches(item.targetText, query)}</div>
     `;
 
@@ -1420,7 +1421,6 @@ $('#link-repo').addEventListener('click', (e) => {
 // Packaged builds update themselves through electron-updater; `npm start`
 // and builds it cannot update fall back to a plain "a new version exists" check.
 const RELEASES_PAGE = 'https://github.com/PabloSensei/ai-translator/releases/latest';
-let autoUpdateSupported = false;
 let lastUpdateState = null;
 
 function releasesLink(text) {
@@ -1439,7 +1439,7 @@ function renderUpdateStatus(status) {
     const el = $('#update-status');
     el.className = 'update-status';
     el.textContent = '';
-    $('#btn-download-update').hidden = status.state !== 'available';
+    $('#btn-download-update').hidden = status.state !== 'available' || Boolean(status.manual);
     $('#btn-install-update').hidden = status.state !== 'downloaded';
 
     const version = status.version ? `Version ${status.version}` : 'A new version';
@@ -1452,7 +1452,9 @@ function renderUpdateStatus(status) {
             break;
         case 'available':
             el.classList.add('update-available');
-            el.textContent = `${version} is available (you have ${status.currentVersion}).`;
+            el.textContent = `${version} is available (you have ${status.currentVersion}). `;
+            // Builds that cannot install updates themselves (macOS) link to the download.
+            if (status.manual) el.appendChild(releasesLink('Download it from GitHub'));
             break;
         case 'downloading':
             el.textContent = `Downloading ${version.toLowerCase()}... ${status.percent || 0}%`;
@@ -1481,13 +1483,11 @@ function renderUpdateStatus(status) {
 window.api.onUpdateStatus(renderUpdateStatus);
 
 async function initUpdates(settings) {
-    autoUpdateSupported = Boolean(settings.autoUpdateSupported);
-    $('#auto-update-row').hidden = !autoUpdateSupported;
+    $('#auto-update-row').hidden = !settings.autoUpdateSupported;
     $('#auto-update-checkbox').checked = settings.autoUpdate !== false;
-    if (autoUpdateSupported) {
-        const status = await window.api.getUpdateStatus();
-        if (status && status.state !== 'idle') renderUpdateStatus(status);
-    }
+    // Also on macOS, where updates are announced rather than installed.
+    const status = await window.api.getUpdateStatus();
+    if (status && status.state !== 'idle') renderUpdateStatus(status);
 }
 
 $('#auto-update-checkbox').addEventListener('change', async (e) => {

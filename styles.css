@@ -1411,6 +1411,9 @@ body::after {
 }
 
 .history-item-image {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     font-style: italic;
 }
 

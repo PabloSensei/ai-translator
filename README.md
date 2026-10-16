@@ -50,6 +50,8 @@
 | <img src="assets/screenshot-dark.png" width="420" alt="Main interface in the dark theme"> | <img src="assets/screenshot-light.png" width="420" alt="Main interface in the light theme"> |
 | **Fix text mode** | **Settings** |
 | <img src="assets/screenshot-fix.png" width="420" alt="Fix text mode correcting spelling and grammar"> | <img src="assets/screenshot-settings.png" width="420" alt="Settings with theme, provider and model options"> |
+| **Text from a screenshot** | **History** |
+| <img src="assets/screenshot-image.png" width="420" alt="A Japanese notice pasted as an image and translated into English"> | <img src="assets/screenshot-history.png" width="420" alt="History with search, favorites and export"> |
 
 </div>
 
@@ -71,6 +73,12 @@ Download the latest version from [Releases](https://github.com/PabloSensei/ai-tr
 | 🐧 **Linux** | `AI-Translator-<version>-x86_64.AppImage` or `ai-translator_<version>_amd64.deb` |
 
 After downloading, install and launch — no Node.js or npm required.
+
+The builds are not code-signed, so the OS warns on the first launch:
+
+- **Windows** — SmartScreen shows *"Windows protected your PC"*: click **More info → Run anyway**.
+- **macOS** — right-click the app in *Applications* and choose **Open**, then **Open** again (or *System Settings → Privacy & Security → Open Anyway*). If macOS says the app *"is damaged"*, run `xattr -cr "/Applications/AI Translator.app"` once.
+- **Linux** — make the AppImage executable: `chmod +x AI-Translator-*.AppImage`.
 
 ### Build from Source
 
@@ -164,7 +172,7 @@ Untick *Download updates automatically* to be asked first. Running from source (
 | Windows (installer) | ✅ |
 | Linux AppImage | ✅ |
 | Linux `.deb` | ✅ (asks for your password to install) |
-| macOS | ✅ only for signed builds — macOS refuses to update an unsigned app, so unsigned builds link to the releases page instead |
+| macOS | 🔔 notifies and links to the download — macOS only lets signed apps replace themselves |
 
 ### Global Hotkeys
 
@@ -181,23 +189,6 @@ Both are configurable in ⚙️ Settings: click the field and press the new comb
 - **Search** filters by words in the original or the translation
 - ★ marks a favorite: favorites are never pushed out by new translations, survive **Clear**, and have their own filter
 - **Export** saves the entries currently shown as CSV (opens in Excel / Google Sheets), JSON or Markdown
-
-## 🔏 Code signing
-
-Release builds are signed when the certificates are present as repository secrets (Settings → Secrets and variables → Actions); without them the workflow still builds, just unsigned.
-
-| Secret | What it is |
-|--------|------------|
-| `WIN_CERTIFICATE` | Windows code-signing certificate (`.pfx`), base64-encoded: `base64 -w0 cert.pfx` |
-| `WIN_CERTIFICATE_PASSWORD` | Its password |
-| `MAC_CERTIFICATE` | *Developer ID Application* certificate exported from Keychain as `.p12`, base64-encoded |
-| `MAC_CERTIFICATE_PASSWORD` | Its password |
-| `APPLE_ID` | Apple ID used for notarization |
-| `APPLE_APP_SPECIFIC_PASSWORD` | An [app-specific password](https://support.apple.com/102654) for that Apple ID |
-| `APPLE_TEAM_ID` | Your 10-character Apple Developer Team ID |
-
-- **Windows** — unsigned installers work, but SmartScreen warns on first run until the certificate builds reputation.
-- **macOS** — a signed *and* notarized build opens without Gatekeeper warnings and is required for automatic updates. Both need a paid Apple Developer account.
 
 ## 🛠️ Technologies
 

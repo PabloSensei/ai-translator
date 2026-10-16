@@ -24,7 +24,7 @@ const {
   getProvider
 } = require('./lib/providers');
 const { trimHistory, formatHistoryExport, EXPORT_FORMATS } = require('./lib/history');
-const { createUpdater, CHECK_DELAY_MS, CHECK_INTERVAL_MS, RELEASES_URL } = require('./lib/updater');
+const { createUpdater, CAN_INSTALL_UPDATES, CHECK_DELAY_MS, CHECK_INTERVAL_MS, RELEASES_URL } = require('./lib/updater');
 
 // electron-store — ESM-only module starting from v9, use dynamic import
 let Store;
@@ -386,6 +386,7 @@ function initAutoUpdater() {
     updater: autoUpdater,
     currentVersion: app.getVersion(),
     autoDownload: settingsStore.get('autoUpdate') !== false,
+    canInstall: CAN_INSTALL_UPDATES,
     onStatus: (status) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-status', status);
       if (tray && !tray.isDestroyed()) tray.setContextMenu(buildTrayMenu());
@@ -566,8 +567,8 @@ function setupIPC() {
       defaultGeminiModels: DEFAULT_GEMINI_MODELS,
       defaultAnthropicModels: DEFAULT_ANTHROPIC_MODELS,
       autoUpdate: settingsStore.get('autoUpdate') !== false,
-      // False in development and in builds electron-updater cannot update.
-      autoUpdateSupported: Boolean(updater),
+      // False in development; on macOS updates are announced but not installed.
+      autoUpdateSupported: Boolean(updater) && CAN_INSTALL_UPDATES,
       version: app.getVersion()
     };
   });
