@@ -62,7 +62,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
-    "@google/generative-ai": "^0.24.1",
+    "@google/genai": "^2.30.0",
     "electron-store": "^11.0.2"
   },
   "devDependencies": {

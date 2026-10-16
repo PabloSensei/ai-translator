@@ -203,9 +203,9 @@ Settings are stored locally via `electron-store`:
 | Parameter | Description | Default |
 |---------|----------|-------------|
 | `provider` | Active provider (`gemini`, `anthropic` or `openrouter`) | `gemini` |
-| `apiKey` | Google Gemini API key (encrypted at rest) | — |
-| `anthropicApiKey` | Anthropic API key (encrypted at rest) | — |
-| `openrouterApiKey` | OpenRouter API key (encrypted at rest) | — |
+| `apiKey` | Google Gemini API key (encrypted at rest; never sent back to the window) | — |
+| `anthropicApiKey` | Anthropic API key (encrypted at rest; never sent back to the window) | — |
+| `openrouterApiKey` | OpenRouter API key (encrypted at rest; never sent back to the window) | — |
 | `model` / `anthropicModel` / `openrouterModel` | Selected model per provider | `gemini-2.5-flash` / `claude-opus-5-5` / — |
 | `theme` | `dark`, `light`, or `system` | `dark` |
 | `style` | Selected translation style | `neutral` |

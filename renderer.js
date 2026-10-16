@@ -79,9 +79,7 @@ async function init() {
     applyTheme(settings.theme, settings.resolvedTheme);
     $('#theme-select').value = settings.theme || 'dark';
 
-    if (settings.apiKey) $('#api-key-input').value = settings.apiKey;
-    if (settings.openrouterApiKey) $('#openrouter-key-input').value = settings.openrouterApiKey;
-    if (settings.anthropicApiKey) $('#anthropic-key-input').value = settings.anthropicApiKey;
+    renderKeyStatus(settings.savedKeys);
 
     if (settings.hotkey) savedHotkeys.hotkey = settings.hotkey;
     if (typeof settings.selectionHotkey === 'string') savedHotkeys.selectionHotkey = settings.selectionHotkey;
@@ -802,11 +800,11 @@ function populateModelSelect(select, models, selected) {
 
 // Saves the key that is currently typed in, so "Refresh" works right after
 // pasting a key without a separate trip to "Save Settings".
-async function refreshModelSelect(btn, provider, keyInput, keyField, select) {
+async function refreshModelSelect(btn, provider, select) {
     btn.disabled = true;
     btn.textContent = 'Loading...';
     try {
-        await window.api.saveSettings({ [keyField]: keyInput.value.trim() });
+        await saveTypedKeys([provider]);
         const selected = select.value;
         const result = await window.api.listModels(provider);
         populateModelSelect(select, result.models || [], selected);
@@ -818,11 +816,11 @@ async function refreshModelSelect(btn, provider, keyInput, keyField, select) {
 }
 
 $('#btn-refresh-gemini-models').addEventListener('click', (e) => {
-    refreshModelSelect(e.currentTarget, 'gemini', $('#api-key-input'), 'apiKey', $('#model-select'));
+    refreshModelSelect(e.currentTarget, 'gemini', $('#model-select'));
 });
 
 $('#btn-refresh-anthropic-models').addEventListener('click', (e) => {
-    refreshModelSelect(e.currentTarget, 'anthropic', $('#anthropic-key-input'), 'anthropicApiKey', $('#anthropic-model-select'));
+    refreshModelSelect(e.currentTarget, 'anthropic', $('#anthropic-model-select'));
 });
 
 function setOpenRouterModel(modelId) {
@@ -858,7 +856,7 @@ $('#btn-refresh-openrouter-models').addEventListener('click', async (e) => {
     btn.disabled = true;
     btn.textContent = 'Loading...';
     try {
-        await window.api.saveSettings({ openrouterApiKey: $('#openrouter-key-input').value.trim() });
+        await saveTypedKeys(['openrouter']);
         const result = await window.api.listModels('openrouter');
         if (result.success) {
             openRouterModels = result.models;
@@ -878,6 +876,63 @@ $('#openrouter-model-filter').addEventListener('input', (e) => renderOpenRouterM
 $('#openrouter-model-select').addEventListener('change', (e) => setOpenRouterModel(e.target.value));
 
 // ===== Settings: keys, hotkey, save =====
+// Saved keys stay in the main process. The fields only ever hold a key the
+// user is typing in; a saved one is shown as a "Key saved" line instead.
+const KEY_INPUTS = {
+    gemini: { input: '#api-key-input', field: 'apiKey' },
+    anthropic: { input: '#anthropic-key-input', field: 'anthropicApiKey' },
+    openrouter: { input: '#openrouter-key-input', field: 'openrouterApiKey' }
+};
+
+function renderKeyStatus(savedKeys = {}) {
+    for (const [provider, { input }] of Object.entries(KEY_INPUTS)) {
+        const field = $(input);
+        field.dataset.placeholder ??= field.placeholder;
+        field.placeholder = savedKeys[provider] ? '••••••••••••••••' : field.dataset.placeholder;
+        $(`#${provider}-key-status`).hidden = !savedKeys[provider];
+    }
+}
+
+// The settings payload for keys typed into the given providers' fields.
+// Empty fields are left out: they mean "keep the saved key", not "remove it".
+function typedKeys(providers = Object.keys(KEY_INPUTS)) {
+    const keys = {};
+    for (const provider of providers) {
+        const { input, field } = KEY_INPUTS[provider];
+        const value = $(input).value.trim();
+        if (value) keys[field] = value;
+    }
+    return keys;
+}
+
+// Once a typed key is stored the field is cleared, so it does not linger in the DOM.
+function afterKeysSaved(sent, result) {
+    if (!result || !result.success) return;
+    for (const { input, field } of Object.values(KEY_INPUTS)) {
+        if (sent[field] !== undefined) {
+            $(input).value = '';
+            $(input).type = 'password';
+        }
+    }
+    renderKeyStatus(result.savedKeys);
+}
+
+async function saveTypedKeys(providers) {
+    const keys = typedKeys(providers);
+    if (!Object.keys(keys).length) return;
+    afterKeysSaved(keys, await window.api.saveSettings(keys));
+}
+
+document.querySelectorAll('[data-remove-key]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const { field } = KEY_INPUTS[btn.dataset.removeKey];
+        const sent = { [field]: '' };
+        const result = await window.api.saveSettings(sent);
+        afterKeysSaved(sent, result);
+        showToast(result.success ? 'API key removed' : (result.error || 'Failed to remove the key'), result.success ? 'success' : 'error');
+    });
+});
+
 $('#toggle-api-key').addEventListener('click', () => {
     const input = $('#api-key-input');
     input.type = input.type === 'password' ? 'text' : 'password';
@@ -958,12 +1013,10 @@ $('#btn-save-settings').addEventListener('click', async () => {
     const anthropicModel = $('#anthropic-model-select').value;
     const openrouterModel = $('#openrouter-model-current').dataset.modelId;
 
-    // Keys are always sent: an emptied field means "remove the saved key".
+    // Only newly typed keys are sent; "Remove" deletes a saved one.
     const settings = {
         provider: $('#provider-select').value,
-        apiKey: $('#api-key-input').value.trim(),
-        openrouterApiKey: $('#openrouter-key-input').value.trim(),
-        anthropicApiKey: $('#anthropic-key-input').value.trim()
+        ...typedKeys()
     };
     if (hotkey) settings.hotkey = hotkey;
     if (selectionHotkey !== undefined) settings.selectionHotkey = selectionHotkey;
@@ -976,6 +1029,7 @@ $('#btn-save-settings').addEventListener('click', async () => {
         showToast(result.error || 'Failed to save settings', 'error');
         return;
     }
+    afterKeysSaved(settings, result);
     if (result.hotkeyError) {
         Object.assign(savedHotkeys, result.hotkeys);
         $('#hotkey-input').value = savedHotkeys.hotkey;
