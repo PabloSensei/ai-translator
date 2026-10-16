@@ -27,11 +27,12 @@ test('SSE parser waits for the line to finish', () => {
   assert.deepStrictEqual(collect(['data: partial']), []);
 });
 
-test('parseOpenRouterChunk extracts text deltas', () => {
-  assert.strictEqual(parseOpenRouterChunk('{"choices":[{"delta":{"content":"Hal"}}]}'), 'Hal');
-  assert.strictEqual(parseOpenRouterChunk('{"choices":[{"delta":{"role":"assistant"}}]}'), '');
-  assert.strictEqual(parseOpenRouterChunk('{"choices":[]}'), '');
-  assert.strictEqual(parseOpenRouterChunk('not json'), '');
+test('parseOpenRouterChunk extracts text deltas and the finish reason', () => {
+  assert.deepStrictEqual(parseOpenRouterChunk('{"choices":[{"delta":{"content":"Hal"}}]}'), { text: 'Hal', finishReason: null });
+  assert.deepStrictEqual(parseOpenRouterChunk('{"choices":[{"delta":{"role":"assistant"}}]}'), { text: '', finishReason: null });
+  assert.deepStrictEqual(parseOpenRouterChunk('{"choices":[]}'), { text: '', finishReason: null });
+  assert.deepStrictEqual(parseOpenRouterChunk('not json'), { text: '', finishReason: null });
+  assert.deepStrictEqual(parseOpenRouterChunk('{"choices":[{"delta":{"content":""},"finish_reason":"length"}]}'), { text: '', finishReason: 'length' });
   assert.strictEqual(parseOpenRouterChunk('[DONE]'), null);
 });
 
@@ -71,4 +72,60 @@ test('OpenRouter explains when the model cannot read images', async () => {
     getProvider('openrouter').generate({ system: 's', user: 'u', image }, 'sk-or-test', 'meta-llama/llama-3.3-70b-instruct'),
     /cannot read images/
   );
+});
+
+const sse = (...events) => new Response(events.map(e => `data: ${typeof e === 'string' ? e : JSON.stringify(e)}\n\n`).join(''), { status: 200 });
+const delta = (content, finish_reason = null) => ({ choices: [{ delta: { content }, finish_reason }] });
+
+test('OpenRouter: a normal stream ends with stop and [DONE]', async () => {
+  globalThis.fetch = async () => sse(delta('Hal'), delta('lo', 'stop'), '[DONE]');
+  const deltas = [];
+  assert.strictEqual(await getProvider('openrouter').generate({ system: 's', user: 'u' }, 'k', 'm', { onDelta: d => deltas.push(d) }), 'Hallo');
+  assert.deepStrictEqual(deltas, ['Hal', 'lo']);
+});
+
+test('OpenRouter: an answer cut off by the token limit is an error', async () => {
+  globalThis.fetch = async () => sse(delta('Hal'), delta('', 'length'), '[DONE]');
+  await assert.rejects(getProvider('openrouter').generate({ system: 's', user: 'u' }, 'k', 'm'), /cut off/);
+});
+
+test('OpenRouter: a filtered answer is an error', async () => {
+  globalThis.fetch = async () => sse(delta('Hal'), delta('', 'content_filter'), '[DONE]');
+  await assert.rejects(getProvider('openrouter').generate({ system: 's', user: 'u' }, 'k', 'm'), /declined/);
+});
+
+test('OpenRouter: a stream that just stops is not taken as complete', async () => {
+  globalThis.fetch = async () => sse(delta('Hal'));
+  await assert.rejects(getProvider('openrouter').generate({ system: 's', user: 'u' }, 'k', 'm'), /closed before the answer was complete/);
+});
+
+test('OpenRouter: the last line may arrive without a trailing newline', async () => {
+  globalThis.fetch = async () => new Response(`data: ${JSON.stringify(delta('Hallo', 'stop'))}`, { status: 200 });
+  assert.strictEqual(await getProvider('openrouter').generate({ system: 's', user: 'u' }, 'k', 'm'), 'Hallo');
+});
+
+test('OpenRouter: Stop during the stream aborts it', async () => {
+  const controller = new AbortController();
+  globalThis.fetch = async (url, init) => new Response(new ReadableStream({
+    start(c) {
+      c.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(delta('Hal'))}\n\n`));
+      init.signal.addEventListener('abort', () => c.error(init.signal.reason));
+    }
+  }), { status: 200 });
+  const pending = getProvider('openrouter').generate({ system: 's', user: 'u' }, 'k', 'm', { signal: controller.signal, onDelta: () => controller.abort() });
+  await assert.rejects(pending, err => err.name === 'AbortError');
+});
+
+test('withDeadline tells a timeout apart from Stop', async () => {
+  const { withDeadline } = require('../lib/providers');
+  const timed = withDeadline(undefined, 5);
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(timed.signal.aborted);
+  assert.strictEqual(timed.timedOut(), true);
+
+  const controller = new AbortController();
+  const stopped = withDeadline(controller.signal, 60000);
+  controller.abort();
+  assert.ok(stopped.signal.aborted);
+  assert.strictEqual(stopped.timedOut(), false);
 });
