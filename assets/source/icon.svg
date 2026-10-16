@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- App icon (window, installers). Rendered to assets/icon.png at 1024px; the tray/titlebar use tray.svg. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d6ff5"/>
+      <stop offset="0.55" stop-color="#7c5cf2"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <radialGradient id="shine" cx="0.3" cy="0.12" r="0.75">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <!-- userSpaceOnUse: a bounding-box gradient on a straight line has zero
+         height and the stroke would not be drawn at all. -->
+    <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="540" y1="500" x2="760" y2="760">
+      <stop offset="0" stop-color="#5b5ef0"/>
+      <stop offset="1" stop-color="#9a4cf0"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#2e1065" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle background with a small margin, as desktop icons expect -->
+  <rect x="56" y="56" width="912" height="912" rx="210" fill="url(#bg)"/>
+  <rect x="56" y="56" width="912" height="912" rx="210" fill="url(#shine)"/>
+
+  <!-- Back bubble: source language -->
+  <path d="M246 190 H514 A96 96 0 0 1 610 286 V464 A96 96 0 0 1 514 560 H318 L228 632 L242 560 A96 96 0 0 1 150 464 V286 A96 96 0 0 1 246 190 Z"
+        fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-opacity="0.35" stroke-width="6"/>
+  <path d="M248 460 L326 256 L404 460 M276 388 H376" fill="none" stroke="#ffffff" stroke-width="42"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Front bubble: target language -->
+  <g filter="url(#shadow)">
+    <path d="M516 440 H778 A96 96 0 0 1 874 536 V716 A96 96 0 0 1 778 812 L792 880 L704 812 H516 A96 96 0 0 1 420 716 V536 A96 96 0 0 1 516 440 Z"
+          fill="#ffffff"/>
+  </g>
+  <g fill="none" stroke="url(#ink)" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M647 512 V538"/>
+    <path d="M543 576 H751"/>
+    <path d="M596 584 Q632 680 748 742"/>
+    <path d="M698 584 Q662 680 546 742"/>
+  </g>
+
+  <!-- Sparkle: AI -->
+  <path d="M800 150 Q808 214 864 222 Q808 230 800 294 Q792 230 736 222 Q792 214 800 150 Z" fill="#ffffff"/>
+  <path d="M884 312 Q888 340 912 344 Q888 348 884 376 Q880 348 856 344 Q880 340 884 312 Z" fill="#ffffff" fill-opacity="0.8"/>
+</svg>
