@@ -70,7 +70,7 @@ Download the latest version from [Releases](https://github.com/PabloSensei/ai-tr
 |----------|---------|
 | 🪟 **Windows** | `AI-Translator-Setup-<version>.exe` |
 | 🍏 **macOS** | `AI-Translator-<version>-arm64.dmg` |
-| 🐧 **Linux** | `AI-Translator-<version>-x86_64.AppImage` or `ai-translator_<version>_amd64.deb` |
+| 🐧 **Linux** | `AI-Translator-<version>-x86_64.AppImage` or `AI-Translator-<version>-amd64.deb` |
 
 After downloading, install and launch — no Node.js or npm required.
 
