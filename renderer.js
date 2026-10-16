@@ -98,6 +98,7 @@ async function init() {
     setOpenRouterModel(settings.openrouterModel);
 
     $('#app-version').textContent = `v${settings.version || ''}`;
+    initUpdates(settings);
 
     customStyles = settings.customStyles || [];
     currentStyle = settings.style || 'neutral';
@@ -1416,6 +1417,95 @@ $('#link-repo').addEventListener('click', (e) => {
 });
 
 // ===== Updates =====
+// Packaged builds update themselves through electron-updater; `npm start`
+// and builds it cannot update fall back to a plain "a new version exists" check.
+const RELEASES_PAGE = 'https://github.com/PabloSensei/ai-translator/releases/latest';
+let autoUpdateSupported = false;
+let lastUpdateState = null;
+
+function releasesLink(text) {
+    const link = document.createElement('a');
+    link.href = '#';
+    link.textContent = text;
+    link.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        window.api.openExternal(RELEASES_PAGE);
+    });
+    return link;
+}
+
+function renderUpdateStatus(status) {
+    if (!status) return;
+    const el = $('#update-status');
+    el.className = 'update-status';
+    el.textContent = '';
+    $('#btn-download-update').hidden = status.state !== 'available';
+    $('#btn-install-update').hidden = status.state !== 'downloaded';
+
+    const version = status.version ? `Version ${status.version}` : 'A new version';
+    switch (status.state) {
+        case 'checking':
+            el.textContent = 'Checking for updates...';
+            break;
+        case 'latest':
+            el.textContent = `You are on the latest version (${status.currentVersion}).`;
+            break;
+        case 'available':
+            el.classList.add('update-available');
+            el.textContent = `${version} is available (you have ${status.currentVersion}).`;
+            break;
+        case 'downloading':
+            el.textContent = `Downloading ${version.toLowerCase()}... ${status.percent || 0}%`;
+            break;
+        case 'downloaded':
+            el.classList.add('update-available');
+            el.textContent = `${version} is ready. It installs when you restart the app.`;
+            break;
+        case 'error':
+            el.classList.add('error-text');
+            el.textContent = `Update failed: ${status.error} `;
+            el.appendChild(releasesLink('Open the releases page'));
+            break;
+        default:
+            break;
+    }
+
+    // Announce the moments that need the user, once each.
+    if (status.state !== lastUpdateState) {
+        if (status.state === 'downloaded') showToast(`${version} is ready — restart to install it`, 'success');
+        if (status.state === 'available' && lastUpdateState !== null) showToast(`Update available: v${status.version}`, 'info');
+    }
+    lastUpdateState = status.state;
+}
+
+window.api.onUpdateStatus(renderUpdateStatus);
+
+async function initUpdates(settings) {
+    autoUpdateSupported = Boolean(settings.autoUpdateSupported);
+    $('#auto-update-row').hidden = !autoUpdateSupported;
+    $('#auto-update-checkbox').checked = settings.autoUpdate !== false;
+    if (autoUpdateSupported) {
+        const status = await window.api.getUpdateStatus();
+        if (status && status.state !== 'idle') renderUpdateStatus(status);
+    }
+}
+
+$('#auto-update-checkbox').addEventListener('change', async (e) => {
+    await window.api.saveSettings({ autoUpdate: e.target.checked });
+    showToast(e.target.checked ? 'Updates will download automatically' : 'You will be asked before an update downloads', 'info');
+});
+
+$('#btn-download-update').addEventListener('click', async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+        renderUpdateStatus(await window.api.downloadUpdate());
+    } finally {
+        e.currentTarget.disabled = false;
+    }
+});
+
+$('#btn-install-update').addEventListener('click', () => window.api.installUpdate());
+
 $('#btn-check-updates').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     const status = $('#update-status');
@@ -1428,6 +1518,11 @@ $('#btn-check-updates').addEventListener('click', async (e) => {
     try {
         const result = await window.api.checkForUpdates();
 
+        if (result.status) {
+            renderUpdateStatus(result.status);
+            return;
+        }
+
         if (!result.success) {
             status.classList.add('error-text');
             status.textContent = `Update check failed: ${result.error}`;
@@ -1437,15 +1532,7 @@ $('#btn-check-updates').addEventListener('click', async (e) => {
         if (result.updateAvailable) {
             status.classList.add('update-available');
             status.textContent = `Version ${result.latestVersion} is available (you have ${result.currentVersion}). `;
-
-            const link = document.createElement('a');
-            link.href = '#';
-            link.textContent = 'Open the download page';
-            link.addEventListener('click', (ev) => {
-                ev.preventDefault();
-                window.api.openExternal('https://github.com/PabloSensei/ai-translator/releases/latest');
-            });
-            status.appendChild(link);
+            status.appendChild(releasesLink('Open the download page'));
             showToast(`Update available: v${result.latestVersion}`, 'info');
         } else {
             status.textContent = result.note || `You are on the latest version (${result.currentVersion}).`;

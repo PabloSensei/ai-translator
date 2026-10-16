@@ -39,13 +39,73 @@ jobs:
       - name: Test
         run: npm test
 
+      # Signing is optional: each variable is exported only when its secret
+      # exists, so a fork or a repo without certificates still builds
+      # (unsigned) instead of failing. See "Code signing" in the README.
+      - name: Configure code signing
+        shell: bash
+        env:
+          MAC_CERTIFICATE: ${{ secrets.MAC_CERTIFICATE }}
+          MAC_CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          WIN_CERTIFICATE: ${{ secrets.WIN_CERTIFICATE }}
+          WIN_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PASSWORD }}
+        run: |
+          # Multi-line safe (base64 certificates often wrap). Secret values
+          # are masked in the log by GitHub already.
+          set_env() {
+            [ -n "$2" ] || return 0
+            { echo "$1<<__SIGNING_EOF__"; echo "$2"; echo "__SIGNING_EOF__"; } >> "$GITHUB_ENV"
+          }
+          case "$RUNNER_OS" in
+            macOS)
+              if [ -n "$MAC_CERTIFICATE" ]; then
+                set_env CSC_LINK "$MAC_CERTIFICATE"
+                set_env CSC_KEY_PASSWORD "$MAC_CERTIFICATE_PASSWORD"
+                if [ -n "$APPLE_ID" ]; then
+                  set_env APPLE_ID "$APPLE_ID"
+                  set_env APPLE_APP_SPECIFIC_PASSWORD "$APPLE_APP_SPECIFIC_PASSWORD"
+                  set_env APPLE_TEAM_ID "$APPLE_TEAM_ID"
+                  echo "macOS: signing and notarizing"
+                else
+                  echo "macOS: signing without notarization (APPLE_ID not set)"
+                fi
+              else
+                # Without this electron-builder may pick up an unrelated
+                # identity from the runner's keychain.
+                echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+                echo "macOS: no certificate, building unsigned (auto-update will not install on macOS)"
+              fi
+              ;;
+            Windows)
+              if [ -n "$WIN_CERTIFICATE" ]; then
+                set_env WIN_CSC_LINK "$WIN_CERTIFICATE"
+                set_env WIN_CSC_KEY_PASSWORD "$WIN_CERTIFICATE_PASSWORD"
+                echo "Windows: signing"
+              else
+                echo "Windows: no certificate, building unsigned (SmartScreen will warn on first run)"
+              fi
+              ;;
+          esac
+
       - name: Build
         run: ${{ matrix.build_cmd }}
 
+      # The latest*.yml files and .blockmap files are what electron-updater
+      # reads to find and download updates; the mac .zip is what it installs.
       - name: Upload artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.blockmap
+            dist/latest*.yml
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

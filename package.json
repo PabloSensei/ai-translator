@@ -14,6 +14,7 @@
   "build": {
     "appId": "com.ai.translator",
     "productName": "AI Translator",
+    "artifactName": "AI-Translator-${version}-${arch}.${ext}",
     "directories": {
       "output": "dist"
     },
@@ -27,11 +28,23 @@
       "lib/**/*",
       "index.html",
       "styles.css",
-      "assets/**/*"
+      "assets/**/*",
+      "!assets/screenshot*",
+      "!assets/source/**"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "PabloSensei",
+        "repo": "ai-translator"
+      }
     ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "artifactName": "AI-Translator-Setup-${version}.${ext}"
     },
     "linux": {
       "target": [
@@ -43,9 +56,13 @@
       "maintainer": "PabloSensei"
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "assets/icon.png",
-      "category": "public.app-category.utilities"
+      "category": "public.app-category.utilities",
+      "hardenedRuntime": true
     }
   },
   "keywords": [
@@ -63,7 +80,8 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",
     "@google/genai": "^2.30.0",
-    "electron-store": "^11.0.2"
+    "electron-store": "^11.0.2",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "electron": "^44.3.0",

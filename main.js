@@ -24,6 +24,7 @@ const {
   getProvider
 } = require('./lib/providers');
 const { trimHistory, formatHistoryExport, EXPORT_FORMATS } = require('./lib/history');
+const { createUpdater, CHECK_DELAY_MS, CHECK_INTERVAL_MS, RELEASES_URL } = require('./lib/updater');
 
 // electron-store — ESM-only module starting from v9, use dynamic import
 let Store;
@@ -96,7 +97,9 @@ async function initStores() {
       anthropicModel: DEFAULT_ANTHROPIC_MODEL,
       theme: 'dark',
       style: 'neutral',
-      customStyles: []
+      customStyles: [],
+      // Download new versions in the background; they install on the next quit.
+      autoUpdate: true
     }
   });
 
@@ -218,11 +221,8 @@ function watchSystemTheme() {
 }
 
 // --- Tray Icon ---
-function createTray() {
-  const iconPath = path.join(__dirname, 'assets', 'icon_tray.png');
-  tray = new Tray(iconPath);
-
-  const contextMenu = Menu.buildFromTemplate([
+function buildTrayMenu() {
+  const template = [
     {
       label: 'Show / Hide',
       click: () => toggleWindow()
@@ -231,18 +231,30 @@ function createTray() {
       label: 'Translate Clipboard',
       click: () => translateSelection()
     },
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        app.isQuitting = true;
-        app.quit();
-      }
+    { type: 'separator' }
+  ];
+  if (updater && updater.status.state === 'downloaded') {
+    template.push({
+      label: `Restart to Install v${updater.status.version}`,
+      click: () => installUpdate()
+    }, { type: 'separator' });
+  }
+  template.push({
+    label: 'Quit',
+    click: () => {
+      app.isQuitting = true;
+      app.quit();
     }
-  ]);
+  });
+  return Menu.buildFromTemplate(template);
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, 'assets', 'icon_tray.png');
+  tray = new Tray(iconPath);
 
   tray.setToolTip('AI Translator');
-  tray.setContextMenu(contextMenu);
+  tray.setContextMenu(buildTrayMenu());
 
   tray.on('double-click', () => toggleWindow());
   // On Windows a single click on a tray icon is the expected way to open an app.
@@ -354,7 +366,44 @@ function registerHotkeys(hotkeys = savedHotkeys()) {
   return failed;
 }
 
-// --- Update check ---
+// --- Automatic updates ---
+// Only a packaged build can update itself; `npm start` falls back to the
+// GitHub release check below.
+let updater = null;
+
+function initAutoUpdater() {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (err) {
+    console.error('electron-updater is unavailable:', err.message);
+    return;
+  }
+  autoUpdater.logger = console;
+
+  updater = createUpdater({
+    updater: autoUpdater,
+    currentVersion: app.getVersion(),
+    autoDownload: settingsStore.get('autoUpdate') !== false,
+    onStatus: (status) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-status', status);
+      if (tray && !tray.isDestroyed()) tray.setContextMenu(buildTrayMenu());
+    }
+  });
+
+  setTimeout(() => updater.check(), CHECK_DELAY_MS).unref();
+  setInterval(() => updater.check(), CHECK_INTERVAL_MS).unref();
+}
+
+function installUpdate() {
+  // quitAndInstall closes the windows before 'before-quit' fires, so the
+  // hide-to-tray handler has to be told now or it would cancel the quit.
+  app.isQuitting = true;
+  if (!updater || !updater.install()) app.isQuitting = false;
+}
+
+// --- Update check (without electron-updater) ---
 async function checkForUpdates() {
   const currentVersion = app.getVersion();
   const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
@@ -376,7 +425,7 @@ async function checkForUpdates() {
     currentVersion,
     latestVersion,
     updateAvailable: Boolean(latestVersion) && isNewerVersion(latestVersion, currentVersion),
-    releaseUrl: `https://github.com/${GITHUB_REPO}/releases/latest`
+    releaseUrl: RELEASES_URL(GITHUB_REPO)
   };
 }
 
@@ -389,7 +438,7 @@ const ALLOWED_EXTERNAL_URLS = [
   'https://platform.claude.com/settings/keys',
   `https://github.com/${GITHUB_REPO}`,
   `https://github.com/${GITHUB_REPO}/releases`,
-  `https://github.com/${GITHUB_REPO}/releases/latest`
+  RELEASES_URL(GITHUB_REPO)
 ];
 
 function getApiKey(provider) {
@@ -489,6 +538,10 @@ function setupIPC() {
 
   ipcMain.handle('read-clipboard-image', () => readClipboardImage());
 
+  ipcMain.handle('get-update-status', () => (updater ? updater.status : null));
+  ipcMain.handle('download-update', () => (updater ? updater.download() : null));
+  ipcMain.on('install-update', () => installUpdate());
+
   ipcMain.on('cancel-translation', (event, requestId) => {
     const controller = inflightTranslations.get(requestId);
     if (controller) controller.abort();
@@ -512,6 +565,9 @@ function setupIPC() {
       customStyles: sanitizeCustomStyles(settingsStore.get('customStyles')),
       defaultGeminiModels: DEFAULT_GEMINI_MODELS,
       defaultAnthropicModels: DEFAULT_ANTHROPIC_MODELS,
+      autoUpdate: settingsStore.get('autoUpdate') !== false,
+      // False in development and in builds electron-updater cannot update.
+      autoUpdateSupported: Boolean(updater),
       version: app.getVersion()
     };
   });
@@ -545,6 +601,10 @@ function setupIPC() {
     }
     if (settings.customStyles !== undefined) {
       settingsStore.set('customStyles', sanitizeCustomStyles(settings.customStyles));
+    }
+    if (settings.autoUpdate !== undefined) {
+      settingsStore.set('autoUpdate', Boolean(settings.autoUpdate));
+      if (updater) updater.setAutoDownload(Boolean(settings.autoUpdate));
     }
     if (settings.theme !== undefined) {
       const theme = ['dark', 'light', 'system'].includes(settings.theme) ? settings.theme : 'dark';
@@ -613,6 +673,17 @@ function setupIPC() {
 
   // Updates
   ipcMain.handle('check-for-updates', async () => {
+    if (updater) {
+      const status = await updater.check();
+      return {
+        success: status.state !== 'error',
+        error: status.error,
+        currentVersion: status.currentVersion,
+        latestVersion: status.version || null,
+        updateAvailable: ['available', 'downloading', 'downloaded'].includes(status.state),
+        status
+      };
+    }
     try {
       return await checkForUpdates();
     } catch (err) {
@@ -742,6 +813,7 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     registerHotkeys();
     watchSystemTheme();
+    initAutoUpdater();
   });
 }
 

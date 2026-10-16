@@ -1413,3 +1413,44 @@ body::after {
 .history-item-image {
     font-style: italic;
 }
+
+/* ===== Updates ===== */
+.checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.checkbox-row[hidden] {
+    display: none;
+}
+
+.setting-group .checkbox-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 1px 0 0;
+    padding: 0;
+    flex-shrink: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.secondary-btn[hidden] {
+    display: none;
+}
+
+.secondary-btn.accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.secondary-btn.accent:hover:not(:disabled) {
+    background: var(--accent);
+    filter: brightness(1.1);
+}

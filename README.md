@@ -39,7 +39,7 @@
 - ⌨️ **Global Hotkey** — summon the translator from any application (default `Ctrl+Shift+T`)
 - 🎯 **Recent Language Pairs** — the quick-access row is built from the pairs you actually use
 - 🔒 **System Tray** — runs in the background and is always at your fingertips
-- 🔔 **Update Check** — see at a glance when a newer release is published
+- 🔔 **Automatic Updates** — new versions download in the background and install on the next restart
 
 ## 🖥️ Screenshots
 
@@ -66,9 +66,9 @@ Download the latest version from [Releases](https://github.com/PabloSensei/ai-tr
 
 | Platform | Package |
 |----------|---------|
-| 🪟 **Windows** | `AI Translator Setup <version>.exe` |
-| 🍏 **macOS** | `AI Translator-<version>-arm64.dmg` |
-| 🐧 **Linux** | `AI Translator-<version>.AppImage` or `.deb` |
+| 🪟 **Windows** | `AI-Translator-Setup-<version>.exe` |
+| 🍏 **macOS** | `AI-Translator-<version>-arm64.dmg` |
+| 🐧 **Linux** | `AI-Translator-<version>-x86_64.AppImage` or `ai-translator_<version>_amd64.deb` |
 
 After downloading, install and launch — no Node.js or npm required.
 
@@ -155,7 +155,16 @@ Use the ☀️/🌙 button in the title bar to flip between light and dark, or p
 Either way the picker only lists models that reply with text — image, audio, video, music and embedding models are filtered out, even though the APIs report many of them as usable.
 
 ### Updates
-Settings → About → **Check for updates** compares your version against the latest GitHub release and links to the download page.
+Installed builds update themselves from GitHub Releases: a few seconds after start (and every 6 hours) the app checks for a new version, downloads it in the background and installs it the next time it restarts. When an update is ready you get a notification, a **Restart & install** button in Settings → About, and a **Restart to Install** item in the tray menu.
+
+Untick *Download updates automatically* to be asked first. Running from source (`npm start`) only checks whether a newer release exists and links to it.
+
+| Platform | Automatic updates |
+|----------|-------------------|
+| Windows (installer) | ✅ |
+| Linux AppImage | ✅ |
+| Linux `.deb` | ✅ (asks for your password to install) |
+| macOS | ✅ only for signed builds — macOS refuses to update an unsigned app, so unsigned builds link to the releases page instead |
 
 ### Global Hotkeys
 
@@ -173,6 +182,23 @@ Both are configurable in ⚙️ Settings: click the field and press the new comb
 - ★ marks a favorite: favorites are never pushed out by new translations, survive **Clear**, and have their own filter
 - **Export** saves the entries currently shown as CSV (opens in Excel / Google Sheets), JSON or Markdown
 
+## 🔏 Code signing
+
+Release builds are signed when the certificates are present as repository secrets (Settings → Secrets and variables → Actions); without them the workflow still builds, just unsigned.
+
+| Secret | What it is |
+|--------|------------|
+| `WIN_CERTIFICATE` | Windows code-signing certificate (`.pfx`), base64-encoded: `base64 -w0 cert.pfx` |
+| `WIN_CERTIFICATE_PASSWORD` | Its password |
+| `MAC_CERTIFICATE` | *Developer ID Application* certificate exported from Keychain as `.p12`, base64-encoded |
+| `MAC_CERTIFICATE_PASSWORD` | Its password |
+| `APPLE_ID` | Apple ID used for notarization |
+| `APPLE_APP_SPECIFIC_PASSWORD` | An [app-specific password](https://support.apple.com/102654) for that Apple ID |
+| `APPLE_TEAM_ID` | Your 10-character Apple Developer Team ID |
+
+- **Windows** — unsigned installers work, but SmartScreen warns on first run until the certificate builds reputation.
+- **macOS** — a signed *and* notarized build opens without Gatekeeper warnings and is required for automatic updates. Both need a paid Apple Developer account.
+
 ## 🛠️ Technologies
 
 | Technology | Purpose |
@@ -182,6 +208,7 @@ Both are configurable in ⚙️ Settings: click the field and press the new comb
 | [Anthropic Claude](https://platform.claude.com/) | Translation engine (official `@anthropic-ai/sdk`) |
 | [OpenRouter](https://openrouter.ai/) | Alternative model provider |
 | [electron-store](https://github.com/sindresorhus/electron-store) | Storing settings and history |
+| [electron-updater](https://www.electron.build/auto-update) | Automatic updates from GitHub Releases |
 | HTML/CSS/JS | Interface |
 
 ## 📁 Project Structure
@@ -193,6 +220,7 @@ ai-translator/
 │   ├── providers.js # Gemini, Anthropic and OpenRouter clients
 │   ├── prompt.js    # Prompt building and translation styles
 │   ├── history.js   # History trimming and export formats
+│   ├── updater.js   # Automatic update state machine (electron-updater)
 │   └── settings.js  # Validation of everything that crosses IPC
 ├── languages.js     # Language list shared by main and renderer
 ├── preload.js       # Preload script, bridge between main and renderer
@@ -223,6 +251,7 @@ Settings are stored locally via `electron-store`:
 | `selectionHotkey` | Translate selection hotkey (empty = disabled) | `Ctrl+Shift+Y` |
 | `windowBounds` | Window Size | `860×640` |
 | `recentPairs` | Recently used language pairs | `[]` |
+| `autoUpdate` | Download updates automatically | `true` |
 
 ## 🤝 Contributing
 

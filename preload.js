@@ -24,6 +24,9 @@ contextBridge.exposeInMainWorld('api', {
     addRecentPair: (pair) => ipcRenderer.invoke('add-recent-pair', pair),
     listModels: (provider) => ipcRenderer.invoke('list-models', provider),
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+    getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
+    downloadUpdate: () => ipcRenderer.invoke('download-update'),
+    installUpdate: () => ipcRenderer.send('install-update'),
     readClipboardImage: () => ipcRenderer.invoke('read-clipboard-image'),
 
     windowMinimize: () => ipcRenderer.send('window-minimize'),
@@ -44,6 +47,10 @@ contextBridge.exposeInMainWorld('api', {
     // Text picked up by the "translate selection" hotkey or tray item.
     onTranslateText: (callback) => {
         ipcRenderer.on('translate-text', (event, text) => callback(text));
+    },
+    // Automatic update progress: { state, version, percent, error, currentVersion }.
+    onUpdateStatus: (callback) => {
+        ipcRenderer.on('update-status', (event, status) => callback(status));
     },
     // A clipboard image (PNG data URL) picked up by the same hotkey.
     onTranslateImage: (callback) => {

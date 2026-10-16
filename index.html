@@ -351,8 +351,14 @@
         <div class="setting-group about-group">
           <label>About</label>
           <p class="setting-hint">AI Translator <span id="app-version"></span></p>
+          <label class="checkbox-row" id="auto-update-row" hidden>
+            <input type="checkbox" id="auto-update-checkbox">
+            <span>Download updates automatically <span class="setting-hint">— they install the next time the app restarts</span></span>
+          </label>
           <div class="model-row">
             <button class="secondary-btn" id="btn-check-updates">Check for updates</button>
+            <button class="secondary-btn" id="btn-download-update" hidden>Download update</button>
+            <button class="secondary-btn accent" id="btn-install-update" hidden>Restart &amp; install</button>
             <a href="#" id="link-repo" class="repo-link">GitHub repository</a>
           </div>
           <p class="update-status" id="update-status"></p>
