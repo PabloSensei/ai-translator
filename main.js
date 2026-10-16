@@ -1,4 +1,4 @@
-const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog } = require('electron');
+const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog, clipboard } = require('electron');
 const path = require('path');
 
 const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput } = require('./lib/prompt');
@@ -28,6 +28,9 @@ let settingsStore;
 let historyStore;
 
 const DEFAULT_HOTKEY = 'Ctrl+Shift+T';
+// Not a Ctrl+Alt combination: on Polish and many other layouts Ctrl+Alt is
+// AltGr and types characters (Ctrl+Alt+C = ć).
+const DEFAULT_SELECTION_HOTKEY = 'Ctrl+Shift+Y';
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
 const MAX_HISTORY_ITEMS = 100;
 
@@ -80,6 +83,8 @@ async function initStores() {
       anthropicApiKey: '',
       provider: 'gemini',
       hotkey: DEFAULT_HOTKEY,
+      // Empty string disables it.
+      selectionHotkey: DEFAULT_SELECTION_HOTKEY,
       windowBounds: { width: 860, height: 640 },
       // Filled in from actual usage — starts empty on a fresh install.
       recentPairs: [],
@@ -219,6 +224,10 @@ function createTray() {
       label: 'Show / Hide',
       click: () => toggleWindow()
     },
+    {
+      label: 'Translate Clipboard',
+      click: () => translateSelection()
+    },
     { type: 'separator' },
     {
       label: 'Quit',
@@ -257,19 +266,60 @@ function toggleWindow() {
   }
 }
 
-// --- Global Hotkey ---
-// Registers the given accelerator, or the saved one. Returns false when the OS
-// refused it (invalid accelerator, or taken by another application).
-function registerHotkey(hotkey = settingsStore.get('hotkey') || DEFAULT_HOTKEY) {
-  globalShortcut.unregisterAll();
-  try {
-    const success = globalShortcut.register(hotkey, () => toggleWindow());
-    if (!success) console.error(`Failed to register hotkey: ${hotkey}`);
-    return success;
-  } catch (err) {
-    console.error(`Error registering hotkey ${hotkey}:`, err.message);
-    return false;
+// --- Translate selection ---
+// Linux (X11 and most Wayland compositors) exposes the current selection as
+// the PRIMARY clipboard, so highlighted text can be read without copying it.
+// Windows and macOS have no such buffer; there the user copies first.
+function readSelectedText() {
+  if (process.platform === 'linux') {
+    const primary = clipboard.readText('selection');
+    if (primary && primary.trim()) return primary;
   }
+  return clipboard.readText();
+}
+
+function translateSelection() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const text = readSelectedText().trim();
+  showWindow();
+  const send = () => mainWindow.webContents.send('translate-text', text);
+  if (mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.once('did-finish-load', send);
+  } else {
+    send();
+  }
+}
+
+// --- Global Hotkeys ---
+const HOTKEYS = {
+  hotkey: { action: () => toggleWindow() },
+  selectionHotkey: { action: () => translateSelection() }
+};
+
+function savedHotkeys() {
+  return {
+    hotkey: settingsStore.get('hotkey') || DEFAULT_HOTKEY,
+    selectionHotkey: settingsStore.get('selectionHotkey') ?? DEFAULT_SELECTION_HOTKEY
+  };
+}
+
+// Registers every global shortcut, from `hotkeys` or the saved settings.
+// Returns the setting names the OS refused (invalid accelerator, or taken by
+// another application); an empty accelerator means "disabled" and is skipped.
+function registerHotkeys(hotkeys = savedHotkeys()) {
+  globalShortcut.unregisterAll();
+  const failed = [];
+  for (const [field, { action }] of Object.entries(HOTKEYS)) {
+    const accelerator = hotkeys[field];
+    if (!accelerator) continue;
+    try {
+      if (!globalShortcut.register(accelerator, action)) failed.push(field);
+    } catch (err) {
+      failed.push(field);
+    }
+    if (failed.includes(field)) console.error(`Failed to register hotkey: ${accelerator}`);
+  }
+  return failed;
 }
 
 // --- Update check ---
@@ -320,9 +370,18 @@ function getModelFor(provider) {
   return settingsStore.get('model') || DEFAULT_GEMINI_MODEL;
 }
 
+// In-flight translations by renderer request id, so they can be cancelled.
+const inflightTranslations = new Map();
+
 function setupIPC() {
-  // Translation
+  // Translation. The answer is streamed to the renderer as 'translate-delta'
+  // events while it is generated; the resolved value is the final, cleaned text.
   ipcMain.handle('translate', async (event, request) => {
+    const { requestId } = request || {};
+    const id = Number.isSafeInteger(requestId) ? requestId : null;
+    const controller = new AbortController();
+    if (id !== null) inflightTranslations.set(id, controller);
+
     try {
       const { text, sourceLang, targetLang, style, mode } = request || {};
       const isFix = mode === 'fix';
@@ -348,7 +407,14 @@ function setupIPC() {
         styleInstruction
       });
 
-      const raw = await getProvider(provider).generate(prompt, getApiKey(provider), getModelFor(provider));
+      const onDelta = id === null ? undefined : (delta) => {
+        if (!event.sender.isDestroyed()) event.sender.send('translate-delta', { requestId: id, delta });
+      };
+      const raw = await getProvider(provider).generate(prompt, getApiKey(provider), getModelFor(provider), {
+        signal: controller.signal,
+        onDelta
+      });
+      if (controller.signal.aborted) return { success: false, cancelled: true };
       const translated = cleanModelOutput(raw);
       if (!translated) throw new Error('The model returned an empty response.');
 
@@ -369,8 +435,16 @@ function setupIPC() {
 
       return { success: true, translated };
     } catch (err) {
+      if (controller.signal.aborted) return { success: false, cancelled: true };
       return { success: false, error: err.message };
+    } finally {
+      if (id !== null) inflightTranslations.delete(id);
     }
+  });
+
+  ipcMain.on('cancel-translation', (event, requestId) => {
+    const controller = inflightTranslations.get(requestId);
+    if (controller) controller.abort();
   });
 
   // Settings
@@ -381,7 +455,8 @@ function setupIPC() {
       openrouterApiKey: getApiKey('openrouter'),
       anthropicApiKey: getApiKey('anthropic'),
       provider: sanitizeProvider(settingsStore.get('provider')),
-      hotkey: settingsStore.get('hotkey'),
+      hotkey: savedHotkeys().hotkey,
+      selectionHotkey: savedHotkeys().selectionHotkey,
       recentPairs: settingsStore.get('recentPairs') || [],
       model: getModelFor('gemini'),
       openrouterModel: getModelFor('openrouter'),
@@ -440,18 +515,36 @@ function setupIPC() {
 
     const result = { success: true, resolvedTheme: resolveTheme(settingsStore.get('theme')) };
 
-    if (settings.hotkey !== undefined) {
-      const hotkey = sanitizeString(settings.hotkey, 64);
-      const previous = settingsStore.get('hotkey') || DEFAULT_HOTKEY;
-      if (hotkey && hotkey !== previous) {
-        // Only keep a shortcut the OS actually accepted; otherwise the old
-        // one stays active and the user is told why.
-        if (registerHotkey(hotkey)) {
-          settingsStore.set('hotkey', hotkey);
+    const requested = {};
+    for (const field of Object.keys(HOTKEYS)) {
+      if (settings[field] === undefined) continue;
+      const value = sanitizeString(settings[field], 64);
+      // The show/hide shortcut is how the app is reached; it cannot be cleared.
+      if (field === 'hotkey' && !value) continue;
+      requested[field] = value;
+    }
+    if (Object.keys(requested).length) {
+      const previous = savedHotkeys();
+      const next = { ...previous, ...requested };
+      const changed = Object.keys(HOTKEYS).some(field => next[field] !== previous[field]);
+      if (changed) {
+        let error = null;
+        if (next.hotkey === next.selectionHotkey) {
+          error = `${next.hotkey} cannot be used for both shortcuts.`;
         } else {
-          registerHotkey(previous);
-          result.hotkeyError = `The shortcut ${hotkey} could not be registered — it may be invalid or used by another app. Keeping ${previous}.`;
-          result.hotkey = previous;
+          // Only keep shortcuts the OS actually accepted; otherwise the old
+          // ones stay active and the user is told which one failed.
+          const failed = registerHotkeys(next);
+          if (failed.length) {
+            error = `${failed.map(f => next[f]).join(', ')} could not be registered — it may be invalid or used by another app.`;
+          }
+        }
+        if (error) {
+          registerHotkeys(previous);
+          result.hotkeyError = `${error} Keeping the previous shortcuts.`;
+          result.hotkeys = previous;
+        } else {
+          for (const field of Object.keys(HOTKEYS)) settingsStore.set(field, next[field]);
         }
       }
     }
@@ -522,7 +615,7 @@ function setupIPC() {
 
   // Hotkey management
   ipcMain.on('unregister-hotkey', () => globalShortcut.unregisterAll());
-  ipcMain.on('register-hotkey', () => registerHotkey());
+  ipcMain.on('register-hotkey', () => registerHotkeys());
 
   // Opening links in browser
   ipcMain.on('open-external', async (event, url) => {
@@ -557,7 +650,7 @@ if (!app.requestSingleInstanceLock()) {
     setupIPC();
     createWindow();
     createTray();
-    registerHotkey();
+    registerHotkeys();
     watchSystemTheme();
   });
 }

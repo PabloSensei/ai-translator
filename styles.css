@@ -752,6 +752,35 @@ a:hover {
     transform: translateY(0);
 }
 
+/* While generating, the main button stops the request. */
+.translate-btn.stoppable {
+    background: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-focus);
+    box-shadow: none;
+}
+
+.translate-btn.stoppable:hover {
+    border-color: var(--error);
+    box-shadow: none;
+}
+
+/* Blinking caret at the end of a translation that is still streaming in. */
+.target-text.streaming::after {
+    content: '▍';
+    margin-left: 1px;
+    color: var(--accent);
+    animation: caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+    to { visibility: hidden; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .target-text.streaming::after { animation: none; }
+}
+
 .translate-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
