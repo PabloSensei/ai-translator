@@ -1,6 +1,6 @@
 {
   "name": "ai-translator",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Desktop translator powered by Google Gemini, Anthropic Claude or OpenRouter, with 30+ languages and multiple translation styles",
   "main": "main.js",
   "scripts": {
@@ -88,6 +88,6 @@
     "electron-builder": "^26.17.0"
   },
   "allowScripts": {
-    "electron@44.3.0": true
+    "electron@44.8.0": true
   }
 }
