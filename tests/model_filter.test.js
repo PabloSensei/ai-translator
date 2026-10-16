@@ -1,22 +1,6 @@
 const assert = require('assert');
 
-// Implementations mirrored from main.js
-const NON_TEXT_MODEL_PATTERN = /embedding|image|imagen|audio|-tts|\btts\b|veo|lyria|live|aqa|learnlm/i;
-
-function openRouterReturnsText(model) {
-  const arch = model.architecture || {};
-
-  if (Array.isArray(arch.output_modalities) && arch.output_modalities.length) {
-    return arch.output_modalities.includes('text') && !arch.output_modalities.includes('image');
-  }
-
-  if (typeof arch.modality === 'string' && arch.modality.includes('->')) {
-    const outputs = arch.modality.split('->')[1].split('+');
-    return outputs.includes('text') && !outputs.includes('image');
-  }
-
-  return true;
-}
+const { NON_TEXT_MODEL_PATTERN, openRouterReturnsText } = require('../lib/providers');
 
 console.log('--- Testing the Gemini non-text model filter ---');
 

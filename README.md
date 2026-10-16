@@ -4,12 +4,13 @@
 
 # ✦ AI Translator
 
-**Desktop Translator powered by Google Gemini and OpenRouter**
+**Desktop Translator powered by Google Gemini, Anthropic Claude and OpenRouter**
 
 *Fast, beautiful, and smart text translation supporting 30+ languages*
 
 [![Electron](https://img.shields.io/badge/Electron-44-47848F?logo=electron&logoColor=white)](https://www.electronjs.org/)
 [![Gemini AI](https://img.shields.io/badge/Gemini-supported-4285F4?logo=google&logoColor=white)](https://ai.google.dev/)
+[![Claude](https://img.shields.io/badge/Claude-supported-D97757?logo=anthropic&logoColor=white)](https://platform.claude.com/)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-supported-6366F1)](https://openrouter.ai/)
 [![License: Non-Commercial](https://img.shields.io/badge/License-Non--Commercial-A855F7)](LICENSE)
 
@@ -30,7 +31,7 @@
 - 🎨 **10 Translation Styles + Custom** — formal, neutral, casual, technical, academic, creative, concise, simple, marketing and polite, plus your own saved styles
 - 🌓 **Light, Dark & System Themes** — switch from the title bar or follow the OS theme
 - ⚡ **Instant Translation** — use `Ctrl+Enter` or the "Translate" button
-- 🔥 **Gemini & OpenRouter** — pick from the latest Gemini models (including Gemini 3.8 Flash), or plug in an OpenRouter key and choose from its whole catalogue
+- 🔥 **Gemini, Claude & OpenRouter** — pick from the latest Gemini models (including Gemini 3.8 Flash), Anthropic's Claude models (Opus 5.5, Sonnet 5.5, Haiku 5.5), or plug in an OpenRouter key and choose from its whole catalogue
 - 🔄 **Quick Language Swap** — the swap button instantly switches languages and text
 - 📋 **Translation History** — automatically saves the last 100 translations
 - ⌨️ **Global Hotkey** — summon the translator from any application (default `Ctrl+Shift+T`)
@@ -54,8 +55,8 @@
 
 ### Requirements
 
-- [Node.js](https://nodejs.org/) 18+
-- A [Google Gemini](https://aistudio.google.com/apikey) API key, or an [OpenRouter](https://openrouter.ai/keys) API key
+- [Node.js](https://nodejs.org/) 20+ (only for building from source)
+- A [Google Gemini](https://aistudio.google.com/apikey), [Anthropic](https://platform.claude.com/settings/keys) or [OpenRouter](https://openrouter.ai/keys) API key
 
 ### Pre-built Release (recommended)
 
@@ -92,7 +93,7 @@ npm start
 
 4. **Configure your API Key:**
    - Click the ⚙️ icon in the top panel
-   - Pick a provider — **Google Gemini** or **OpenRouter**
+   - Pick a provider — **Google Gemini**, **Anthropic Claude** or **OpenRouter**
    - Paste the matching API key, then press *Refresh* / *Load models* to pick a model
    - Click "Save Settings"
 
@@ -141,6 +142,7 @@ Use the ☀️/🌙 button in the title bar to flip between light and dark, or p
 | Provider | Notes |
 |----------|-------|
 | **Google Gemini** | Ships with a curated list of current models; *Refresh* queries the API for every model your key can access |
+| **Anthropic Claude** | Uses the official Anthropic SDK. Defaults to Claude Opus 5.5; *Refresh* lists every Claude model your key can access. If a safety classifier declines a request, it is retried server-side on Anthropic's recommended fallback model |
 | **OpenRouter** | Paste an OpenRouter key, press *Load models*, then filter and select any model in its catalogue |
 
 Either way the picker only lists models that reply with text — image, audio, video, music and embedding models are filtered out, even though the APIs report many of them as usable.
@@ -163,6 +165,7 @@ Settings → About → **Check for updates** compares your version against the l
 |-----------|-----------|
 | [Electron](https://www.electronjs.org/) | Desktop application |
 | [Google Gemini AI](https://ai.google.dev/) | Translation engine |
+| [Anthropic Claude](https://platform.claude.com/) | Translation engine (official `@anthropic-ai/sdk`) |
 | [OpenRouter](https://openrouter.ai/) | Alternative model provider |
 | [electron-store](https://github.com/sindresorhus/electron-store) | Storing settings and history |
 | HTML/CSS/JS | Interface |
@@ -171,9 +174,16 @@ Settings → About → **Check for updates** compares your version against the l
 
 ```
 ai-translator/
-├── main.js          # Main Electron process, providers, updates, IPC
+├── main.js          # Main Electron process: windows, tray, hotkey, IPC
+├── lib/
+│   ├── providers.js # Gemini, Anthropic and OpenRouter clients
+│   ├── prompt.js    # Prompt building and translation styles
+│   └── settings.js  # Validation of everything that crosses IPC
+├── languages.js     # Language list shared by main and renderer
 ├── preload.js       # Preload script, bridge between main and renderer
 ├── renderer.js      # UI logic, interface management
+├── utils.js         # Pure helpers (HTML escaping, hotkey capture)
+├── tests/           # Unit tests (`npm test`)
 ├── index.html       # Interface layout
 ├── styles.css       # Application styles
 ├── package.json     # Dependencies and metadata
@@ -186,10 +196,11 @@ Settings are stored locally via `electron-store`:
 
 | Parameter | Description | Default |
 |---------|----------|-------------|
-| `provider` | Active provider (`gemini` or `openrouter`) | `gemini` |
+| `provider` | Active provider (`gemini`, `anthropic` or `openrouter`) | `gemini` |
 | `apiKey` | Google Gemini API key (encrypted at rest) | — |
+| `anthropicApiKey` | Anthropic API key (encrypted at rest) | — |
 | `openrouterApiKey` | OpenRouter API key (encrypted at rest) | — |
-| `model` / `openrouterModel` | Selected model per provider | `gemini-2.5-flash` / — |
+| `model` / `anthropicModel` / `openrouterModel` | Selected model per provider | `gemini-2.5-flash` / `claude-opus-5-5` / — |
 | `theme` | `dark`, `light`, or `system` | `dark` |
 | `style` | Selected translation style | `neutral` |
 | `customStyles` | Your own saved styles | `[]` |
@@ -200,6 +211,8 @@ Settings are stored locally via `electron-store`:
 ## 🤝 Contributing
 
 Contributions are welcome! Pull requests, bug reports, and suggestions are all welcome.
+
+Run `npm test` before opening a pull request.
 
 1. Fork the repository
 2. Create a branch (`git checkout -b feature/amazing-feature`)

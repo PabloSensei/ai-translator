@@ -1,50 +1,21 @@
 // The saved theme is applied ahead of the first paint by theme-init.js.
 
 // ===== Language List =====
-// 'auto' is source-only and always sits at the top of the source dropdown.
-const AUTO_LANG = { code: 'auto', name: 'Detect language', flag: '🌐' };
-
-const LANGUAGES = [
-    { code: 'en', name: 'English', flag: '🇬🇧' },
-    { code: 'ru', name: 'Russian', flag: '🇷🇺' },
-    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-    { code: 'es', name: 'Español', flag: '🇪🇸' },
-    { code: 'it', name: 'Italiano', flag: '🇮🇹' },
-    { code: 'pt', name: 'Português', flag: '🇵🇹' },
-    { code: 'uk', name: 'Українська', flag: '🇺🇦' },
-    { code: 'pl', name: 'Polski', flag: '🇵🇱' },
-    { code: 'cs', name: 'Čeština', flag: '🇨🇿' },
-    { code: 'nl', name: 'Nederlands', flag: '🇳🇱' },
-    { code: 'sv', name: 'Svenska', flag: '🇸🇪' },
-    { code: 'da', name: 'Dansk', flag: '🇩🇰' },
-    { code: 'fi', name: 'Suomi', flag: '🇫🇮' },
-    { code: 'no', name: 'Norsk', flag: '🇳🇴' },
-    { code: 'zh', name: '中文', flag: '🇨🇳' },
-    { code: 'ja', name: '日本語', flag: '🇯🇵' },
-    { code: 'ko', name: '한국어', flag: '🇰🇷' },
-    { code: 'ar', name: 'العربية', flag: '🇸🇦' },
-    { code: 'hi', name: 'हिन्दी', flag: '🇮🇳' },
-    { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
-    { code: 'el', name: 'Ελληνικά', flag: '🇬🇷' },
-    { code: 'he', name: 'עברית', flag: '🇮🇱' },
-    { code: 'th', name: 'ไทย', flag: '🇹🇭' },
-    { code: 'vi', name: 'Tiếng Việt', flag: '🇻🇳' },
-    { code: 'id', name: 'Bahasa Indonesia', flag: '🇮🇩' },
-    { code: 'ms', name: 'Bahasa Melayu', flag: '🇲🇾' },
-    { code: 'ro', name: 'Română', flag: '🇷🇴' },
-    { code: 'hu', name: 'Magyar', flag: '🇭🇺' },
-    { code: 'bg', name: 'Български', flag: '🇧🇬' },
-    { code: 'hr', name: 'Hrvatski', flag: '🇭🇷' },
-    { code: 'sk', name: 'Slovenčina', flag: '🇸🇰' },
-    { code: 'lt', name: 'Lietuvių', flag: '🇱🇹' },
-    { code: 'lv', name: 'Latviešu', flag: '🇱🇻' },
-    { code: 'et', name: 'Eesti', flag: '🇪🇪' },
-    { code: 'ka', name: 'ქართული', flag: '🇬🇪' },
-];
-
+// AUTO_LANG and LANGUAGES come from languages.js, shared with the main process.
 const LANGUAGES_BY_CODE = new Map([[AUTO_LANG.code, AUTO_LANG], ...LANGUAGES.map(l => [l.code, l])]);
-const LANGUAGES_BY_NAME = new Map([[AUTO_LANG.name, AUTO_LANG], ...LANGUAGES.map(l => [l.name, l])]);
+// History written by older versions stored display names ("Deutsch", "Russian")
+// instead of codes, so names in both forms still resolve.
+const LANGUAGES_BY_NAME = new Map([
+    [AUTO_LANG.name, AUTO_LANG],
+    ...LANGUAGES.map(l => [l.english, l]),
+    ...LANGUAGES.map(l => [l.name, l])
+]);
+
+// Resolves a stored history value (a code, or a legacy name) to a language.
+function findLanguage(value) {
+    if (value === 'auto') return AUTO_LANG;
+    return LANGUAGES_BY_CODE.get(value) || LANGUAGES_BY_NAME.get(value) || null;
+}
 
 // ===== Built-in Styles =====
 // Ids must match STYLE_INSTRUCTIONS in main.js, which holds the actual prompt wording.
@@ -107,6 +78,7 @@ async function init() {
 
     if (settings.apiKey) $('#api-key-input').value = settings.apiKey;
     if (settings.openrouterApiKey) $('#openrouter-key-input').value = settings.openrouterApiKey;
+    if (settings.anthropicApiKey) $('#anthropic-key-input').value = settings.anthropicApiKey;
 
     if (settings.hotkey) {
         currentHotkey = settings.hotkey;
@@ -116,7 +88,8 @@ async function init() {
     $('#provider-select').value = settings.provider || 'gemini';
     updateProviderSections();
 
-    populateGeminiModels(settings.defaultGeminiModels || [], settings.model);
+    populateModelSelect($('#model-select'), settings.defaultGeminiModels || [], settings.model);
+    populateModelSelect($('#anthropic-model-select'), settings.defaultAnthropicModels || [], settings.anthropicModel);
     setOpenRouterModel(settings.openrouterModel);
 
     $('#app-version').textContent = `v${settings.version || ''}`;
@@ -127,9 +100,10 @@ async function init() {
 
     // Restore the most recent language pair, if there is one.
     const recentPairs = settings.recentPairs || [];
-    if (recentPairs.length) {
-        currentSourceLang = recentPairs[0].source;
-        currentTargetLang = recentPairs[0].target;
+    const lastPair = recentPairs[0];
+    if (lastPair && LANGUAGES_BY_CODE.has(lastPair.source) && LANGUAGES_BY_CODE.has(lastPair.target) && lastPair.target !== 'auto') {
+        currentSourceLang = lastPair.source;
+        currentTargetLang = lastPair.target;
     }
 
     buildDropdown(sourceLangDropdown, 'source');
@@ -528,9 +502,12 @@ async function doTranslate() {
     const text = sourceText.value.trim();
     if (!text || isTranslating) return;
 
+    // Snapshot the request: the user may switch languages or mode while it
+    // is in flight, and the recent pair must record what was actually sent.
     const isFix = currentMode === 'fix';
+    const sourceLang = currentSourceLang;
+    const targetLang = currentTargetLang;
     const actionText = isFix ? 'Fixing...' : 'Translating...';
-    const btnText = isFix ? 'Fix Text' : 'Translate';
 
     isTranslating = true;
     translateBtn.disabled = true;
@@ -545,20 +522,17 @@ async function doTranslate() {
     try {
         const result = await window.api.translate({
             text,
-            sourceLang: currentSourceLang === 'auto' ? 'auto' : langName(currentSourceLang),
-            targetLang: langName(currentTargetLang),
+            sourceLang,
+            targetLang,
             style: currentStyle,
-            mode: currentMode
+            mode: isFix ? 'fix' : 'translate'
         });
 
         if (result.success) {
             targetText.textContent = result.translated;
 
             if (!isFix) {
-                const res = await window.api.addRecentPair({
-                    source: currentSourceLang,
-                    target: currentTargetLang
-                });
+                const res = await window.api.addRecentPair({ source: sourceLang, target: targetLang });
                 renderRecentPairs(res.pairs);
             }
 
@@ -573,8 +547,9 @@ async function doTranslate() {
     } finally {
         isTranslating = false;
         translateBtn.disabled = false;
-        translateBtn.querySelector('.translate-btn-text').textContent = btnText;
         loader.style.display = 'none';
+        // Restores the button label for whatever mode is active now.
+        updateActionLabels();
     }
 }
 
@@ -666,16 +641,21 @@ async function loadHistory() {
             hour: '2-digit', minute: '2-digit'
         });
 
+        const src = findLanguage(item.sourceLang);
+        const tgt = findLanguage(item.targetLang);
+        const srcLabel = src ? (src.code === 'auto' ? 'Auto' : src.name) : String(item.sourceLang || '');
+        const tgtLabel = tgt ? tgt.name : String(item.targetLang || '');
+
         const langs = item.mode === 'fix'
-            ? `<span>Fix</span><span class="arrow">·</span><span>${escapeHtml(item.sourceLang === 'auto' ? 'Auto' : item.sourceLang)}</span>`
-            : `<span>${escapeHtml(item.sourceLang === 'auto' ? 'Auto' : item.sourceLang)}</span>
+            ? `<span>Fix</span><span class="arrow">·</span><span>${escapeHtml(srcLabel)}</span>`
+            : `<span>${escapeHtml(srcLabel)}</span>
          <span class="arrow">→</span>
-         <span>${escapeHtml(item.targetLang)}</span>`;
+         <span>${escapeHtml(tgtLabel)}</span>`;
 
         el.innerHTML = `
       <div class="history-item-header">
         <div class="history-item-langs">${langs}</div>
-        <span class="history-item-time">${timeStr}</span>
+        <span class="history-item-time">${escapeHtml(timeStr)}</span>
       </div>
       <div class="history-item-source">${escapeHtml(item.sourceText)}</div>
       <div class="history-item-target">${escapeHtml(item.targetText)}</div>
@@ -693,11 +673,8 @@ async function loadHistory() {
 
             setMode(item.mode === 'fix' ? 'fix' : 'translate');
 
-            // Find language codes by names
-            const src = item.sourceLang === 'auto' ? AUTO_LANG : LANGUAGES_BY_NAME.get(item.sourceLang);
-            const tgt = LANGUAGES_BY_NAME.get(item.targetLang);
             if (src) currentSourceLang = src.code;
-            if (tgt) currentTargetLang = tgt.code;
+            if (tgt && tgt.code !== 'auto') currentTargetLang = tgt.code;
             updateLangDisplay();
 
             showView('translate');
@@ -730,12 +707,12 @@ function updateProviderSections() {
     const provider = $('#provider-select').value;
     $('#provider-gemini').hidden = provider !== 'gemini';
     $('#provider-openrouter').hidden = provider !== 'openrouter';
+    $('#provider-anthropic').hidden = provider !== 'anthropic';
 }
 
 $('#provider-select').addEventListener('change', updateProviderSections);
 
-function populateGeminiModels(models, selected) {
-    const select = $('#model-select');
+function populateModelSelect(select, models, selected) {
     select.innerHTML = '';
 
     // Keep a saved model selectable even if it is missing from the fetched list.
@@ -754,19 +731,29 @@ function populateGeminiModels(models, selected) {
     if (selected) select.value = selected;
 }
 
-$('#btn-refresh-gemini-models').addEventListener('click', async (e) => {
-    const btn = e.currentTarget;
+// Saves the key that is currently typed in, so "Refresh" works right after
+// pasting a key without a separate trip to "Save Settings".
+async function refreshModelSelect(btn, provider, keyInput, keyField, select) {
     btn.disabled = true;
     btn.textContent = 'Loading...';
     try {
-        const selected = $('#model-select').value;
-        const result = await window.api.listModels('gemini');
-        populateGeminiModels(result.models || [], selected);
+        await window.api.saveSettings({ [keyField]: keyInput.value.trim() });
+        const selected = select.value;
+        const result = await window.api.listModels(provider);
+        populateModelSelect(select, result.models || [], selected);
         showToast(result.success ? `Loaded ${result.models.length} models` : result.error, result.success ? 'success' : 'error');
     } finally {
         btn.disabled = false;
         btn.textContent = 'Refresh';
     }
+}
+
+$('#btn-refresh-gemini-models').addEventListener('click', (e) => {
+    refreshModelSelect(e.currentTarget, 'gemini', $('#api-key-input'), 'apiKey', $('#model-select'));
+});
+
+$('#btn-refresh-anthropic-models').addEventListener('click', (e) => {
+    refreshModelSelect(e.currentTarget, 'anthropic', $('#anthropic-key-input'), 'anthropicApiKey', $('#anthropic-model-select'));
 });
 
 function setOpenRouterModel(modelId) {
@@ -802,6 +789,7 @@ $('#btn-refresh-openrouter-models').addEventListener('click', async (e) => {
     btn.disabled = true;
     btn.textContent = 'Loading...';
     try {
+        await window.api.saveSettings({ openrouterApiKey: $('#openrouter-key-input').value.trim() });
         const result = await window.api.listModels('openrouter');
         if (result.success) {
             openRouterModels = result.models;
@@ -831,6 +819,11 @@ $('#toggle-openrouter-key').addEventListener('click', () => {
     input.type = input.type === 'password' ? 'text' : 'password';
 });
 
+$('#toggle-anthropic-key').addEventListener('click', () => {
+    const input = $('#anthropic-key-input');
+    input.type = input.type === 'password' ? 'text' : 'password';
+});
+
 $('#hotkey-input').addEventListener('click', function () {
     this.value = 'Press a key combination...';
     this.removeAttribute('readonly');
@@ -838,7 +831,8 @@ $('#hotkey-input').addEventListener('click', function () {
 });
 
 $('#hotkey-input').addEventListener('blur', function () {
-    if (this.value === 'Press a key combination...') {
+    // Abandoned mid-combination ("Ctrl+...") or never started: keep the old one.
+    if (this.value === 'Press a key combination...' || this.value.endsWith('+...')) {
         this.value = currentHotkey;
     }
     this.setAttribute('readonly', true);
@@ -846,6 +840,8 @@ $('#hotkey-input').addEventListener('blur', function () {
 });
 
 $('#hotkey-input').addEventListener('keydown', function (e) {
+    // Plain Tab still moves focus out of the field.
+    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) return;
     e.preventDefault();
 
     if (e.key === 'Escape') {
@@ -854,51 +850,49 @@ $('#hotkey-input').addEventListener('keydown', function (e) {
         return;
     }
 
-    const parts = [];
-    if (e.ctrlKey) parts.push('Ctrl');
-    if (e.altKey) parts.push('Alt');
-    if (e.shiftKey) parts.push('Shift');
-
-    const key = e.key;
-    if (!['Control', 'Alt', 'Shift', 'Meta'].includes(key)) {
-        let keyName = key.length === 1 ? key.toUpperCase() : key;
-        if (keyName === ' ') keyName = 'Space';
-        parts.push(keyName);
-
-        if (parts.length > 1) {
-            this.value = parts.join('+');
-            this.setAttribute('readonly', true);
-            this.blur();
-        }
-    } else {
-        if (parts.length > 0) {
-            this.value = parts.join('+') + '+...';
-        }
+    const { modifiers, accelerator } = keyEventToAccelerator(e);
+    if (accelerator) {
+        this.value = accelerator;
+        this.setAttribute('readonly', true);
+        this.blur();
+    } else if (modifiers.length) {
+        this.value = modifiers.join('+') + '+...';
     }
 });
 
 $('#btn-save-settings').addEventListener('click', async () => {
-    const apiKey = $('#api-key-input').value.trim();
-    const openrouterApiKey = $('#openrouter-key-input').value.trim();
     const hotkey = $('#hotkey-input').value.trim();
     const model = $('#model-select').value;
+    const anthropicModel = $('#anthropic-model-select').value;
     const openrouterModel = $('#openrouter-model-current').dataset.modelId;
-    const provider = $('#provider-select').value;
 
-    const settings = { provider };
-    if (apiKey) settings.apiKey = apiKey;
-    if (openrouterApiKey) settings.openrouterApiKey = openrouterApiKey;
-    if (hotkey && hotkey !== 'Press a key combination...') {
+    // Keys are always sent: an emptied field means "remove the saved key".
+    const settings = {
+        provider: $('#provider-select').value,
+        apiKey: $('#api-key-input').value.trim(),
+        openrouterApiKey: $('#openrouter-key-input').value.trim(),
+        anthropicApiKey: $('#anthropic-key-input').value.trim()
+    };
+    if (hotkey && hotkey !== 'Press a key combination...' && !hotkey.endsWith('+...')) {
         settings.hotkey = hotkey;
-        currentHotkey = hotkey;
     }
     if (model) settings.model = model;
+    if (anthropicModel) settings.anthropicModel = anthropicModel;
     if (openrouterModel) settings.openrouterModel = openrouterModel;
 
     const result = await window.api.saveSettings(settings);
-    if (result.success) {
-        showToast('Settings saved', 'success');
+    if (!result.success) {
+        showToast(result.error || 'Failed to save settings', 'error');
+        return;
     }
+    if (result.hotkeyError) {
+        currentHotkey = result.hotkey;
+        $('#hotkey-input').value = result.hotkey;
+        showToast(result.hotkeyError, 'error');
+        return;
+    }
+    if (settings.hotkey) currentHotkey = settings.hotkey;
+    showToast('Settings saved', 'success');
 });
 
 $('#link-aistudio').addEventListener('click', (e) => {
@@ -909,6 +903,11 @@ $('#link-aistudio').addEventListener('click', (e) => {
 $('#link-openrouter').addEventListener('click', (e) => {
     e.preventDefault();
     window.api.openExternal('https://openrouter.ai/keys');
+});
+
+$('#link-anthropic').addEventListener('click', (e) => {
+    e.preventDefault();
+    window.api.openExternal('https://platform.claude.com/settings/keys');
 });
 
 $('#link-repo').addEventListener('click', (e) => {
