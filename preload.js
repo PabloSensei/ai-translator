@@ -48,6 +48,10 @@ contextBridge.exposeInMainWorld('api', {
     onTranslateText: (callback) => {
         ipcRenderer.on('translate-text', (event, text) => callback(text));
     },
+    // A global shortcut that could not be registered at startup.
+    onHotkeyWarning: (callback) => {
+        ipcRenderer.on('hotkey-warning', (event, message) => callback(message));
+    },
     // Automatic update progress: { state, version, percent, error, currentVersion }.
     onUpdateStatus: (callback) => {
         ipcRenderer.on('update-status', (event, status) => callback(status));

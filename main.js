@@ -168,6 +168,13 @@ function createWindow() {
     mainWindow.show();
   });
 
+  // Windows does not emit 'before-quit' on shutdown, restart or log-off
+  // (see app 'before-quit' in electron.d.ts): without this the window would
+  // hide itself instead of closing and hold up the session end.
+  mainWindow.on('session-end', () => {
+    app.isQuitting = true;
+  });
+
   // Hide to tray on close
   mainWindow.on('close', (e) => {
     if (!app.isQuitting) {
@@ -229,7 +236,9 @@ function buildTrayMenu() {
     },
     {
       label: 'Translate Clipboard',
-      click: () => translateSelection()
+      // The clipboard only, as the label says: on Linux the hotkey also
+      // looks at the highlighted text first.
+      click: () => translateSelection({ usePrimary: false })
     },
     { type: 'separator' }
   ];
@@ -256,10 +265,13 @@ function createTray() {
   tray.setToolTip('AI Translator');
   tray.setContextMenu(buildTrayMenu());
 
-  tray.on('double-click', () => toggleWindow());
-  // On Windows a single click on a tray icon is the expected way to open an app.
+  // On Windows a single click on a tray icon is the expected way to open an
+  // app. A double-click there also delivers a click first, so listening to
+  // both would show the window and hide it again.
   if (process.platform === 'win32') {
     tray.on('click', () => toggleWindow());
+  } else {
+    tray.on('double-click', () => toggleWindow());
   }
 }
 
@@ -288,8 +300,8 @@ function toggleWindow() {
 // Linux (X11 and most Wayland compositors) exposes the current selection as
 // the PRIMARY clipboard, so highlighted text can be read without copying it.
 // Windows and macOS have no such buffer; there the user copies first.
-async function readSelectedText() {
-  if (process.platform === 'linux' && clipboard.selection) {
+async function readSelectedText({ usePrimary = true } = {}) {
+  if (usePrimary && process.platform === 'linux' && clipboard.selection) {
     const primary = await clipboard.selection.readText().catch(() => '');
     if (primary && primary.trim()) return primary;
   }
@@ -313,10 +325,10 @@ async function readClipboardImage() {
   return '';
 }
 
-async function translateSelection() {
+async function translateSelection({ usePrimary = true } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   // Text wins: a copied web image often comes with text alongside it.
-  const text = (await readSelectedText()).trim();
+  const text = (await readSelectedText({ usePrimary })).trim();
   const imageUrl = text ? '' : await readClipboardImage();
   if (mainWindow.isDestroyed()) return;
   showWindow();
@@ -335,6 +347,21 @@ async function translateSelection() {
 }
 
 // --- Global Hotkeys ---
+// A shortcut taken by another app at login would otherwise fail silently,
+// and with no tray icon (GNOME without AppIndicator) the hidden window could
+// not be brought back.
+function warnAboutHotkeys(failed) {
+  if (!failed.length || !mainWindow || mainWindow.isDestroyed()) return;
+  const hotkeys = savedHotkeys();
+  const message = `${failed.map(field => hotkeys[field]).join(', ')} could not be registered — it may be used by another app. Pick another shortcut in Settings.`;
+  const send = () => mainWindow.webContents.send('hotkey-warning', message);
+  if (mainWindow.webContents.isLoading()) {
+    mainWindow.webContents.once('did-finish-load', send);
+  } else {
+    send();
+  }
+}
+
 const HOTKEYS = {
   hotkey: { action: () => toggleWindow() },
   selectionHotkey: { action: () => translateSelection() }
@@ -370,6 +397,7 @@ function registerHotkeys(hotkeys = savedHotkeys()) {
 // Only a packaged build can update itself; `npm start` falls back to the
 // GitHub release check below.
 let updater = null;
+let trayShowsUpdate = false;
 
 function initAutoUpdater() {
   if (!app.isPackaged) return;
@@ -389,7 +417,13 @@ function initAutoUpdater() {
     canInstall: CAN_INSTALL_UPDATES,
     onStatus: (status) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-status', status);
-      if (tray && !tray.isDestroyed()) tray.setContextMenu(buildTrayMenu());
+      // The tray menu only changes when an update becomes (or stops being)
+      // ready; download progress fires many times a second.
+      const ready = status.state === 'downloaded';
+      if (ready !== trayShowsUpdate && tray && !tray.isDestroyed()) {
+        trayShowsUpdate = ready;
+        tray.setContextMenu(buildTrayMenu());
+      }
     }
   });
 
@@ -398,10 +432,12 @@ function initAutoUpdater() {
 }
 
 function installUpdate() {
-  // quitAndInstall closes the windows before 'before-quit' fires, so the
-  // hide-to-tray handler has to be told now or it would cancel the quit.
-  app.isQuitting = true;
-  if (!updater || !updater.install()) app.isQuitting = false;
+  // On Windows and Linux electron-updater installs, then calls app.quit(),
+  // whose 'before-quit' lets the windows close. isQuitting is not set here:
+  // if the install fails the app keeps running, and closing the window
+  // must still hide it to the tray rather than destroy it. (macOS, where
+  // Squirrel closes windows before 'before-quit', never installs updates.)
+  if (updater) updater.install();
 }
 
 // --- Update check (without electron-updater) ---
@@ -782,7 +818,8 @@ function setupIPC() {
   // Opening links in browser
   ipcMain.on('open-external', async (event, url) => {
     if (isAllowedExternalUrl(url, ALLOWED_EXTERNAL_URLS)) {
-      await shell.openExternal(url);
+      // Rejects when there is no browser or URL handler (bare Linux setups).
+      await shell.openExternal(url).catch(err => console.error('Could not open the link:', err.message));
     } else {
       console.warn(`Blocked URL not in allowlist: ${url}`);
     }
@@ -812,7 +849,7 @@ if (!app.requestSingleInstanceLock()) {
     setupIPC();
     createWindow();
     createTray();
-    registerHotkeys();
+    warnAboutHotkeys(registerHotkeys());
     watchSystemTheme();
     initAutoUpdater();
   });
@@ -822,8 +859,9 @@ app.on('window-all-closed', () => {
   // Do not close the application
 });
 
-// Cmd+Q, the app menu, an OS shutdown or an installer update all go through
-// before-quit. Without this flag the 'close' handler would cancel them and
+// Cmd+Q, the app menu, app.quit() from the tray or an installer update all
+// go through before-quit (a Windows shutdown does not: see 'session-end' on
+// the window). Without this flag the 'close' handler would cancel them and
 // hide the window instead, so the app could only be quit from the tray.
 app.on('before-quit', () => {
   app.isQuitting = true;

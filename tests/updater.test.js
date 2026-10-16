@@ -104,3 +104,29 @@ test('where the app cannot install updates, it only announces them', async () =>
   assert.deepStrictEqual(updater.calls, ['check'], 'never downloads');
   assert.strictEqual(u.install(), false);
 });
+
+test('a failed background download is reported, not left as an unhandled rejection', async () => {
+  const updater = fakeUpdater();
+  updater.checkForUpdates = async () => {
+    updater.emit('update-available', { version: '1.2.0' });
+    const downloadPromise = new Promise((resolve, reject) => setTimeout(() => {
+      const err = new Error('net::ERR_CONNECTION_RESET');
+      updater.emit('error', err);
+      reject(err);
+    }, 5));
+    return { updateInfo: { version: '1.2.0' }, downloadPromise };
+  };
+  let unhandled = null;
+  const onUnhandled = (err) => { unhandled = err; };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    const u = createUpdater({ updater, currentVersion: '1.1.0' });
+    await u.check();
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.strictEqual(u.status.state, 'error');
+    assert.match(u.status.error, /internet connection/);
+    assert.strictEqual(unhandled, null);
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+});

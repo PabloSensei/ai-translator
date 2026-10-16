@@ -68,3 +68,14 @@ test('image entries export a placeholder instead of an empty original', () => {
   const out = JSON.parse(formatHistoryExport([entry(1, { image: true, sourceText: '' })], 'json'));
   assert.strictEqual(out[0].sourceText, '(image)');
 });
+
+test('highlightMatches marks every word, keeps positions right and escapes', () => {
+  const { highlightMatches } = require('../utils');
+  assert.strictEqual(highlightMatches('İstanbul kebab', 'kebab'), 'İstanbul <mark>kebab</mark>');
+  assert.strictEqual(highlightMatches('Good Morning, morning', 'MORNING'), 'Good <mark>Morning</mark>, <mark>morning</mark>');
+  assert.strictEqual(highlightMatches('<b>bold</b> & co', 'bold &'), '&lt;b&gt;<mark>bold</mark>&lt;/b&gt; <mark>&amp;</mark> co');
+  assert.strictEqual(highlightMatches('a.b (c)', '. ('), 'a<mark>.</mark>b <mark>(</mark>c)');
+  assert.strictEqual(highlightMatches('keyboard', 'key keyboard'), '<mark>keyboard</mark>');
+  assert.strictEqual(highlightMatches('plain', ''), 'plain');
+  assert.strictEqual(highlightMatches(undefined, 'x'), '');
+});

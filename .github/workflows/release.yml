@@ -36,18 +36,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # electron-builder takes the version from package.json, not from the
+      # tag; a mismatch would publish installers and update feeds with the
+      # old version number, which installed copies never update to.
+      - name: Check the tag matches package.json
+        shell: bash
+        run: |
+          version="v$(node -p "require('./package.json').version")"
+          if [ "$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version"
+            exit 1
+          fi
+
       - name: Test
         run: npm test
 
       - name: Build
         run: ${{ matrix.build_cmd }}
 
-      # The latest*.yml files and .blockmap files are what electron-updater
-      # reads to find and download updates; the mac .zip is what it installs.
-      - name: Upload artifacts
-        uses: softprops/action-gh-release@v2
+      # Each platform hands its files to the publish job instead of uploading
+      # to the release itself: three jobs updating one release would publish
+      # it half-filled and append the generated notes three times.
+      # The latest*.yml and .blockmap files are what electron-updater reads to
+      # find and download updates; the mac .zip is what it installs.
+      - name: Keep installers
+        uses: actions/upload-artifact@v4
         with:
-          files: |
+          name: dist-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
             dist/*.exe
             dist/*.dmg
             dist/*.zip
@@ -55,6 +72,41 @@ jobs:
             dist/*.deb
             dist/*.blockmap
             dist/latest*.yml
+
+  # Runs only when all three builds succeeded, so a release never goes out
+  # with a platform (or its update feed) missing.
+  publish:
+    name: Publish release
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      # The release text is this version's section of CHANGELOG.md; GitHub's
+      # generated list of merged pull requests is appended below it.
+      - name: Release notes from CHANGELOG.md
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## " { if (found) exit; found = ($2 == v) ; next }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::warning::No section for $version in CHANGELOG.md"
+          fi
+          cat release-notes.md
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          body_path: release-notes.md
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
