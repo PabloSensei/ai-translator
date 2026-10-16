@@ -1483,6 +1483,9 @@ function renderUpdateStatus(status) {
 
 window.api.onUpdateStatus(renderUpdateStatus);
 
+// A long-lived toast: it explains why a shortcut does nothing.
+window.api.onHotkeyWarning((message) => showToast(message, 'error', 10000));
+
 async function initUpdates(settings) {
     $('#auto-update-row').hidden = !settings.autoUpdateSupported;
     $('#auto-update-checkbox').checked = settings.autoUpdate !== false;
@@ -1551,7 +1554,7 @@ $('#btn-minimize').addEventListener('click', () => window.api.windowMinimize());
 $('#btn-close').addEventListener('click', () => window.api.windowClose());
 
 // ===== Toast Notifications =====
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', duration = 3000) {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
 
@@ -1562,7 +1565,7 @@ function showToast(message, type = 'info') {
 
     setTimeout(() => {
         if (toast.parentNode) toast.remove();
-    }, 3000);
+    }, duration);
 }
 
 // ===== Start =====
