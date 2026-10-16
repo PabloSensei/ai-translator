@@ -1,4 +1,4 @@
-const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog, clipboard } = require('electron');
+const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog, clipboard, ClipboardItem, systemPreferences } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -24,6 +24,7 @@ const {
   getProvider
 } = require('./lib/providers');
 const { trimHistory, formatHistoryExport, EXPORT_FORMATS } = require('./lib/history');
+const { copySelectedText, acceleratorModifiers } = require('./lib/selection');
 const { createUpdater, CAN_INSTALL_UPDATES, CHECK_DELAY_MS, CHECK_INTERVAL_MS, RELEASES_URL } = require('./lib/updater');
 
 // electron-store — ESM-only module starting from v9, use dynamic import
@@ -236,9 +237,9 @@ function buildTrayMenu() {
     },
     {
       label: 'Translate Clipboard',
-      // The clipboard only, as the label says: on Linux the hotkey also
-      // looks at the highlighted text first.
-      click: () => translateSelection({ usePrimary: false })
+      // The clipboard only, as the label says: the hotkey also looks at
+      // the selection first, and with the tray menu open there is none.
+      click: () => translateSelection({ fromSelection: false })
     },
     { type: 'separator' }
   ];
@@ -299,13 +300,80 @@ function toggleWindow() {
 //
 // Linux (X11 and most Wayland compositors) exposes the current selection as
 // the PRIMARY clipboard, so highlighted text can be read without copying it.
-// Windows and macOS have no such buffer; there the user copies first.
-async function readSelectedText({ usePrimary = true } = {}) {
-  if (usePrimary && process.platform === 'linux' && clipboard.selection) {
+// Windows and macOS have no such buffer: there the app presses Ctrl+C (Cmd+C)
+// for the user (lib/selection.js) and falls back to whatever is already on
+// the clipboard when nothing new gets copied.
+async function readSelectedText({ fromSelection = true } = {}) {
+  if (fromSelection && process.platform === 'linux' && clipboard.selection) {
     const primary = await clipboard.selection.readText().catch(() => '');
     if (primary && primary.trim()) return primary;
   }
+  if (fromSelection && (process.platform === 'win32' || process.platform === 'darwin')) {
+    const keyboard = getSystemKeyboard();
+    if (keyboard) {
+      const copied = await copySelectedText({
+        clipboard,
+        ClipboardItem,
+        keyboard,
+        sleep: (ms) => new Promise(resolve => setTimeout(resolve, ms))
+      }).catch(err => {
+        console.error('Copying the selection failed:', err.message);
+        return '';
+      });
+      if (copied && copied.trim()) return copied;
+    }
+  }
   return clipboard.readText().catch(() => '');
+}
+
+// Presses Ctrl+C (Cmd+C) in the focused app through uiohook-napi, or null
+// where that is unavailable: Linux (which has PRIMARY instead), a native
+// module that failed to load, or macOS without the Accessibility permission.
+let uiohook;
+let accessibilityPrompted = false;
+function getSystemKeyboard() {
+  if (process.platform === 'darwin' && !systemPreferences.isTrustedAccessibilityClient(false)) {
+    // Ask once per run; macOS shows its own dialog that leads to
+    // System Settings → Privacy & Security → Accessibility.
+    if (!accessibilityPrompted) {
+      accessibilityPrompted = true;
+      systemPreferences.isTrustedAccessibilityClient(true);
+    }
+    return null;
+  }
+  if (uiohook === undefined) {
+    try {
+      uiohook = require('uiohook-napi');
+    } catch (err) {
+      console.error('uiohook-napi is unavailable, the hotkey will use the clipboard:', err.message);
+      uiohook = null;
+    }
+  }
+  if (!uiohook) return null;
+
+  const { uIOhook, UiohookKey: K } = uiohook;
+  const codes = {
+    Ctrl: [K.Ctrl, K.CtrlRight],
+    Alt: [K.Alt, K.AltRight],
+    Shift: [K.Shift, K.ShiftRight],
+    Meta: [K.Meta, K.MetaRight]
+  };
+  const copyModifier = process.platform === 'darwin' ? K.Meta : K.Ctrl;
+  return {
+    pressCopy() {
+      // The copy modifier goes down before the hotkey's other modifiers are
+      // lifted: a lone Alt release would open the app's menu bar on Windows,
+      // and a lone Win release the Start menu.
+      uIOhook.keyToggle(copyModifier, 'down');
+      for (const name of acceleratorModifiers(savedHotkeys().selectionHotkey)) {
+        for (const code of codes[name]) {
+          if (code !== copyModifier) uIOhook.keyToggle(code, 'up');
+        }
+      }
+      uIOhook.keyTap(K.C);
+      uIOhook.keyToggle(copyModifier, 'up');
+    }
+  };
 }
 
 // A screenshot copied to the clipboard (Win+Shift+S, Cmd+Ctrl+Shift+4,
@@ -325,10 +393,11 @@ async function readClipboardImage() {
   return '';
 }
 
-async function translateSelection({ usePrimary = true } = {}) {
+async function translateSelection({ fromSelection = true } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  // Text wins: a copied web image often comes with text alongside it.
-  const text = (await readSelectedText({ usePrimary })).trim();
+  // Read before the window shows: the selection belongs to the app that has
+  // focus now. Text wins: a copied web image often comes with text alongside it.
+  const text = (await readSelectedText({ fromSelection })).trim();
   const imageUrl = text ? '' : await readClipboardImage();
   if (mainWindow.isDestroyed()) return;
   showWindow();

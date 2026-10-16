@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1
+
+### Fixed
+- **Translate selection on Windows and macOS** translated whatever was last on the clipboard instead of the selected text. The app now presses `Ctrl+C` (`Cmd+C`) for you, takes the selection and puts your previous clipboard back; with nothing selected it still uses the clipboard. On macOS this needs the Accessibility permission (the system asks for it on first use).
+- The settings button no longer looks like a second theme switch: it is now a gear.
+
 ## 2.0.0
 
 The biggest update so far: a third AI provider, streamed translations, text from screenshots, a searchable history and automatic updates.

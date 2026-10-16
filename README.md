@@ -31,7 +31,7 @@
 - 🎨 **10 Translation Styles + Custom** — formal, neutral, casual, technical, academic, creative, concise, simple, marketing and polite, plus your own saved styles
 - 🌓 **Light, Dark & System Themes** — switch from the title bar or follow the OS theme
 - ⚡ **Instant, Streamed Translation** — use `Ctrl+Enter` or the "Translate" button; the result appears word by word as it is generated, and **Stop** cancels it
-- 📌 **Translate Selection** — copy text in any app and press `Ctrl+Shift+Y`: the translator pops up and translates it (on Linux the highlighted text is used directly, no copy needed)
+- 📌 **Translate Selection** — select text in any app and press `Ctrl+Shift+Y`: the translator pops up and translates it
 - 🖼️ **Translate Screenshots** — paste (`Ctrl+V`), drop or pick an image, or copy a screenshot and press `Ctrl+Shift+Y`: the model reads the text in it and translates it
 - 🔥 **Gemini, Claude & OpenRouter** — pick from the latest Gemini models (including Gemini 3.8 Flash), Anthropic's Claude models (Opus 5.5, Sonnet 5.5, Haiku 5.5), or plug in an OpenRouter key and choose from its whole catalogue
 - 🔄 **Quick Language Swap** — the swap button instantly switches languages and text
@@ -70,7 +70,7 @@ Download the latest version from [Releases](https://github.com/PabloSensei/ai-tr
 |----------|---------|
 | 🪟 **Windows** | `AI-Translator-Setup-<version>.exe` |
 | 🍏 **macOS** | `AI-Translator-<version>-arm64.dmg` |
-| 🐧 **Linux** | `AI-Translator-<version>-x86_64.AppImage` or `ai-translator_<version>_amd64.deb` |
+| 🐧 **Linux** | `AI-Translator-<version>-x86_64.AppImage` or `AI-Translator-<version>-amd64.deb` |
 
 After downloading, install and launch — no Node.js or npm required.
 
@@ -179,9 +179,15 @@ Untick *Download updates automatically* to be asked first. Running from source (
 | Hotkey | Default | What it does |
 |--------|---------|--------------|
 | Show / hide | `Ctrl+Shift+T` | Toggles the translator window |
-| Translate selection | `Ctrl+Shift+Y` | Opens the translator with the copied text — or a copied screenshot — and translates it. On Linux it takes the highlighted text (PRIMARY selection) directly |
+| Translate selection | `Ctrl+Shift+Y` | Opens the translator with the selected text and translates it. With nothing selected it takes the clipboard — copied text or a screenshot |
 
-Both are configurable in ⚙️ Settings: click the field and press the new combination. *Backspace* in the *Translate selection* field disables that hotkey. The tray menu has a **Translate Clipboard** item that does the same.
+How the selection is read:
+- **Windows / macOS** — the app presses `Ctrl+C` (`Cmd+C`) in the app you are in, takes the copied text and puts your previous clipboard back. On macOS this needs the **Accessibility** permission: allow *AI Translator* in *System Settings → Privacy & Security → Accessibility* when asked.
+- **Linux** — the highlighted text (PRIMARY selection) is read directly, nothing is copied.
+
+In a terminal, select the text first: there `Ctrl+C` without a selection stops the running program.
+
+Both are configurable in ⚙️ Settings: click the field and press the new combination. *Backspace* in the *Translate selection* field disables that hotkey. The tray menu has a **Translate Clipboard** item that translates what is on the clipboard.
 
 ### History
 - Click 🕐 to view your history; the last 100 translations are kept
