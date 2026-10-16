@@ -30,7 +30,8 @@
 - 🛠️ **Translate / Fix text Modes** — one toggle switches between translating and correcting spelling and grammar in place
 - 🎨 **10 Translation Styles + Custom** — formal, neutral, casual, technical, academic, creative, concise, simple, marketing and polite, plus your own saved styles
 - 🌓 **Light, Dark & System Themes** — switch from the title bar or follow the OS theme
-- ⚡ **Instant Translation** — use `Ctrl+Enter` or the "Translate" button
+- ⚡ **Instant, Streamed Translation** — use `Ctrl+Enter` or the "Translate" button; the result appears word by word as it is generated, and **Stop** cancels it
+- 📌 **Translate Selection** — copy text in any app and press `Ctrl+Shift+Y`: the translator pops up and translates it (on Linux the highlighted text is used directly, no copy needed)
 - 🔥 **Gemini, Claude & OpenRouter** — pick from the latest Gemini models (including Gemini 3.8 Flash), Anthropic's Claude models (Opus 5.5, Sonnet 5.5, Haiku 5.5), or plug in an OpenRouter key and choose from its whole catalogue
 - 🔄 **Quick Language Swap** — the swap button instantly switches languages and text
 - 📋 **Translation History** — automatically saves the last 100 translations
@@ -150,9 +151,14 @@ Either way the picker only lists models that reply with text — image, audio, v
 ### Updates
 Settings → About → **Check for updates** compares your version against the latest GitHub release and links to the download page.
 
-### Global Hotkey
-- Default: `Ctrl+Shift+T`
-- Configurable in the ⚙️ Settings section
+### Global Hotkeys
+
+| Hotkey | Default | What it does |
+|--------|---------|--------------|
+| Show / hide | `Ctrl+Shift+T` | Toggles the translator window |
+| Translate selection | `Ctrl+Shift+Y` | Opens the translator with the copied text and translates it. On Linux it takes the highlighted text (PRIMARY selection) directly |
+
+Both are configurable in ⚙️ Settings: click the field and press the new combination. *Backspace* in the *Translate selection* field disables that hotkey. The tray menu has a **Translate Clipboard** item that does the same.
 
 ### History
 - All translations are saved automatically
@@ -204,7 +210,8 @@ Settings are stored locally via `electron-store`:
 | `theme` | `dark`, `light`, or `system` | `dark` |
 | `style` | Selected translation style | `neutral` |
 | `customStyles` | Your own saved styles | `[]` |
-| `hotkey` | Global Hotkey | `Ctrl+Shift+T` |
+| `hotkey` | Show / hide hotkey | `Ctrl+Shift+T` |
+| `selectionHotkey` | Translate selection hotkey (empty = disabled) | `Ctrl+Shift+Y` |
 | `windowBounds` | Window Size | `860×640` |
 | `recentPairs` | Recently used language pairs | `[]` |
 

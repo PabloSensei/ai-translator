@@ -38,8 +38,11 @@ let currentTargetLang = 'ru';
 let currentStyle = 'neutral';
 let currentMode = 'translate'; // 'translate' | 'fix'
 let customStyles = [];
-let isTranslating = false;
-let currentHotkey = 'Ctrl+Shift+T';
+// Id of the translation currently on screen, or null when idle. Streamed
+// pieces and results of any other (cancelled or superseded) request are ignored.
+let activeRequestId = null;
+let requestCounter = 0;
+const savedHotkeys = { hotkey: 'Ctrl+Shift+T', selectionHotkey: 'Ctrl+Shift+Y' };
 let currentTheme = 'dark';
 let openRouterModels = [];
 
@@ -80,9 +83,13 @@ async function init() {
     if (settings.openrouterApiKey) $('#openrouter-key-input').value = settings.openrouterApiKey;
     if (settings.anthropicApiKey) $('#anthropic-key-input').value = settings.anthropicApiKey;
 
-    if (settings.hotkey) {
-        currentHotkey = settings.hotkey;
-        $('#hotkey-input').value = settings.hotkey;
+    if (settings.hotkey) savedHotkeys.hotkey = settings.hotkey;
+    if (typeof settings.selectionHotkey === 'string') savedHotkeys.selectionHotkey = settings.selectionHotkey;
+    $('#hotkey-input').value = savedHotkeys.hotkey;
+    $('#selection-hotkey-input').value = savedHotkeys.selectionHotkey;
+    // Only Linux exposes the highlighted text directly (PRIMARY selection).
+    if (window.api.platform === 'linux') {
+        $('#selection-hotkey-hint').textContent = 'Translates the highlighted text (or the clipboard). Backspace disables it';
     }
 
     $('#provider-select').value = settings.provider || 'gemini';
@@ -234,14 +241,14 @@ function updateLangDisplay() {
 
 function updateActionLabels() {
     const isFix = currentMode === 'fix';
-    if (!isTranslating) {
+    if (activeRequestId === null) {
         translateBtn.querySelector('.translate-btn-text').textContent = isFix ? 'Fix Text' : 'Translate';
     }
 
     sourceText.placeholder = isFix ? 'Enter text to fix...' : 'Enter text to translate...';
 
     const placeholder = targetText.querySelector('.placeholder');
-    if (placeholder && !isTranslating) {
+    if (placeholder && activeRequestId === null) {
         placeholder.textContent = isFix
             ? 'Corrected text will appear here...'
             : 'Translation will appear here...';
@@ -490,7 +497,14 @@ $('#custom-style-instruction').addEventListener('keydown', (e) => {
 });
 
 // ===== Translation =====
-translateBtn.addEventListener('click', doTranslate);
+// While a translation runs, the main button stops it.
+translateBtn.addEventListener('click', () => {
+    if (activeRequestId !== null) {
+        stopTranslation();
+    } else {
+        doTranslate();
+    }
+});
 
 sourceText.addEventListener('keydown', (e) => {
     if (e.ctrlKey && e.key === 'Enter') {
@@ -498,20 +512,46 @@ sourceText.addEventListener('keydown', (e) => {
     }
 });
 
+function stopTranslation() {
+    if (activeRequestId === null) return;
+    window.api.cancelTranslation(activeRequestId);
+}
+
+// Text node that streamed pieces are appended to; created on the first piece.
+let streamNode = null;
+
+window.api.onTranslateDelta(({ requestId, delta }) => {
+    if (requestId !== activeRequestId || typeof delta !== 'string') return;
+    if (!streamNode) {
+        targetText.textContent = '';
+        streamNode = document.createTextNode('');
+        targetText.appendChild(streamNode);
+        targetText.classList.add('streaming');
+    }
+    streamNode.appendData(delta);
+    targetText.scrollTop = targetText.scrollHeight;
+});
+
 async function doTranslate() {
     const text = sourceText.value.trim();
-    if (!text || isTranslating) return;
+    if (!text) return;
+
+    // A new request replaces one that is still running.
+    if (activeRequestId !== null) stopTranslation();
 
     // Snapshot the request: the user may switch languages or mode while it
     // is in flight, and the recent pair must record what was actually sent.
+    const requestId = ++requestCounter;
     const isFix = currentMode === 'fix';
     const sourceLang = currentSourceLang;
     const targetLang = currentTargetLang;
     const actionText = isFix ? 'Fixing...' : 'Translating...';
 
-    isTranslating = true;
-    translateBtn.disabled = true;
-    translateBtn.querySelector('.translate-btn-text').textContent = actionText;
+    activeRequestId = requestId;
+    streamNode = null;
+    translateBtn.classList.add('stoppable');
+    translateBtn.querySelector('.translate-btn-text').textContent = 'Stop';
+    translateBtn.title = 'Stop generating';
     loader.style.display = 'flex';
     targetText.innerHTML = '';
     const pending = document.createElement('span');
@@ -521,6 +561,7 @@ async function doTranslate() {
 
     try {
         const result = await window.api.translate({
+            requestId,
             text,
             sourceLang,
             targetLang,
@@ -528,7 +569,12 @@ async function doTranslate() {
             mode: isFix ? 'fix' : 'translate'
         });
 
+        // Superseded by a newer request: that one owns the output now.
+        if (requestId !== activeRequestId) return;
+
         if (result.success) {
+            // The final text is authoritative: it is cleaned up, and may differ
+            // from the streamed pieces if the provider switched models mid-way.
             targetText.textContent = result.translated;
 
             if (!isFix) {
@@ -537,21 +583,44 @@ async function doTranslate() {
             }
 
             showToast(isFix ? 'Text fixed successfully' : 'Translation successful', 'success');
+        } else if (result.cancelled) {
+            // Keep whatever had already arrived; it is not saved to history.
+            if (!streamNode) resetTargetPlaceholder();
+            showToast('Stopped', 'info');
         } else {
             showError(result.error);
             showToast(result.error, 'error');
         }
     } catch (err) {
+        if (requestId !== activeRequestId) return;
         showError(`Error: ${err.message}`);
         showToast(isFix ? 'Fixing error' : 'Translation error', 'error');
     } finally {
-        isTranslating = false;
-        translateBtn.disabled = false;
-        loader.style.display = 'none';
-        // Restores the button label for whatever mode is active now.
-        updateActionLabels();
+        if (requestId === activeRequestId) {
+            activeRequestId = null;
+            streamNode = null;
+            targetText.classList.remove('streaming');
+            translateBtn.classList.remove('stoppable');
+            translateBtn.title = '';
+            loader.style.display = 'none';
+            // Restores the button label for whatever mode is active now.
+            updateActionLabels();
+        }
     }
 }
+
+// ===== Translate selection (global hotkey / tray) =====
+window.api.onTranslateText((text) => {
+    showView('translate');
+    if (!text || !text.trim()) {
+        showToast('Nothing to translate — select or copy some text first', 'info');
+        sourceText.focus();
+        return;
+    }
+    setMode('translate');
+    sourceText.value = text;
+    doTranslate();
+});
 
 function showError(message) {
     targetText.innerHTML = '';
@@ -824,44 +893,67 @@ $('#toggle-anthropic-key').addEventListener('click', () => {
     input.type = input.type === 'password' ? 'text' : 'password';
 });
 
-$('#hotkey-input').addEventListener('click', function () {
-    this.value = 'Press a key combination...';
-    this.removeAttribute('readonly');
-    window.api.unregisterHotkey();
-});
+const HOTKEY_PROMPT = 'Press a key combination...';
 
-$('#hotkey-input').addEventListener('blur', function () {
-    // Abandoned mid-combination ("Ctrl+...") or never started: keep the old one.
-    if (this.value === 'Press a key combination...' || this.value.endsWith('+...')) {
-        this.value = currentHotkey;
-    }
-    this.setAttribute('readonly', true);
-    window.api.registerHotkey();
-});
+// Records a global shortcut into `input`. While recording, all global
+// shortcuts are suspended so the combination reaches the field.
+// `optional` fields can be cleared with Backspace/Delete to disable them.
+function attachHotkeyCapture(input, field, { optional = false } = {}) {
+    input.addEventListener('click', function () {
+        this.value = HOTKEY_PROMPT;
+        this.removeAttribute('readonly');
+        window.api.unregisterHotkey();
+    });
 
-$('#hotkey-input').addEventListener('keydown', function (e) {
-    // Plain Tab still moves focus out of the field.
-    if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) return;
-    e.preventDefault();
-
-    if (e.key === 'Escape') {
-        this.value = currentHotkey;
-        this.blur();
-        return;
-    }
-
-    const { modifiers, accelerator } = keyEventToAccelerator(e);
-    if (accelerator) {
-        this.value = accelerator;
+    input.addEventListener('blur', function () {
+        // Abandoned mid-combination ("Ctrl+...") or never started: keep the old one.
+        if (this.value === HOTKEY_PROMPT || this.value.endsWith('+...')) {
+            this.value = savedHotkeys[field];
+        }
         this.setAttribute('readonly', true);
-        this.blur();
-    } else if (modifiers.length) {
-        this.value = modifiers.join('+') + '+...';
-    }
-});
+        window.api.registerHotkey();
+    });
+
+    input.addEventListener('keydown', function (e) {
+        // Plain Tab still moves focus out of the field.
+        if (e.key === 'Tab' && !e.ctrlKey && !e.altKey && !e.metaKey) return;
+        e.preventDefault();
+
+        if (e.key === 'Escape') {
+            this.value = savedHotkeys[field];
+            this.blur();
+            return;
+        }
+
+        const { modifiers, accelerator } = keyEventToAccelerator(e);
+        if (optional && !modifiers.length && (e.key === 'Backspace' || e.key === 'Delete')) {
+            this.value = '';
+            this.blur();
+            return;
+        }
+        if (accelerator) {
+            this.value = accelerator;
+            this.setAttribute('readonly', true);
+            this.blur();
+        } else if (modifiers.length) {
+            this.value = modifiers.join('+') + '+...';
+        }
+    });
+}
+
+// Value to save from a hotkey field, or undefined when it holds no finished combination.
+function readHotkeyInput(input) {
+    const value = input.value.trim();
+    if (value === HOTKEY_PROMPT || value.endsWith('+...')) return undefined;
+    return value;
+}
+
+attachHotkeyCapture($('#hotkey-input'), 'hotkey');
+attachHotkeyCapture($('#selection-hotkey-input'), 'selectionHotkey', { optional: true });
 
 $('#btn-save-settings').addEventListener('click', async () => {
-    const hotkey = $('#hotkey-input').value.trim();
+    const hotkey = readHotkeyInput($('#hotkey-input'));
+    const selectionHotkey = readHotkeyInput($('#selection-hotkey-input'));
     const model = $('#model-select').value;
     const anthropicModel = $('#anthropic-model-select').value;
     const openrouterModel = $('#openrouter-model-current').dataset.modelId;
@@ -873,9 +965,8 @@ $('#btn-save-settings').addEventListener('click', async () => {
         openrouterApiKey: $('#openrouter-key-input').value.trim(),
         anthropicApiKey: $('#anthropic-key-input').value.trim()
     };
-    if (hotkey && hotkey !== 'Press a key combination...' && !hotkey.endsWith('+...')) {
-        settings.hotkey = hotkey;
-    }
+    if (hotkey) settings.hotkey = hotkey;
+    if (selectionHotkey !== undefined) settings.selectionHotkey = selectionHotkey;
     if (model) settings.model = model;
     if (anthropicModel) settings.anthropicModel = anthropicModel;
     if (openrouterModel) settings.openrouterModel = openrouterModel;
@@ -886,12 +977,14 @@ $('#btn-save-settings').addEventListener('click', async () => {
         return;
     }
     if (result.hotkeyError) {
-        currentHotkey = result.hotkey;
-        $('#hotkey-input').value = result.hotkey;
+        Object.assign(savedHotkeys, result.hotkeys);
+        $('#hotkey-input').value = savedHotkeys.hotkey;
+        $('#selection-hotkey-input').value = savedHotkeys.selectionHotkey;
         showToast(result.hotkeyError, 'error');
         return;
     }
-    if (settings.hotkey) currentHotkey = settings.hotkey;
+    if (settings.hotkey) savedHotkeys.hotkey = settings.hotkey;
+    if (settings.selectionHotkey !== undefined) savedHotkeys.selectionHotkey = settings.selectionHotkey;
     showToast('Settings saved', 'success');
 });
 

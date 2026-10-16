@@ -10,6 +10,7 @@ try {
 
 contextBridge.exposeInMainWorld('api', {
     initialTheme,
+    platform: process.platform,
 
     translate: (data) => ipcRenderer.invoke('translate', data),
     getSettings: () => ipcRenderer.invoke('get-settings'),
@@ -28,7 +29,17 @@ contextBridge.exposeInMainWorld('api', {
     registerHotkey: () => ipcRenderer.send('register-hotkey'),
     openExternal: (url) => ipcRenderer.send('open-external', url),
 
+    cancelTranslation: (requestId) => ipcRenderer.send('cancel-translation', requestId),
+
     onSystemThemeChanged: (callback) => {
         ipcRenderer.on('system-theme-changed', (event, theme) => callback(theme));
+    },
+    // Streamed pieces of an in-flight translation: { requestId, delta }.
+    onTranslateDelta: (callback) => {
+        ipcRenderer.on('translate-delta', (event, payload) => callback(payload));
+    },
+    // Text picked up by the "translate selection" hotkey or tray item.
+    onTranslateText: (callback) => {
+        ipcRenderer.on('translate-text', (event, text) => callback(text));
     }
 });
