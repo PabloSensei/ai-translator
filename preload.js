@@ -18,6 +18,8 @@ contextBridge.exposeInMainWorld('api', {
     getHistory: () => ipcRenderer.invoke('get-history'),
     clearHistory: () => ipcRenderer.invoke('clear-history'),
     deleteHistoryItem: (id) => ipcRenderer.invoke('delete-history-item', id),
+    setHistoryFavorite: (id, favorite) => ipcRenderer.invoke('set-history-favorite', id, favorite),
+    exportHistory: (ids) => ipcRenderer.invoke('export-history', ids),
     getRecentPairs: () => ipcRenderer.invoke('get-recent-pairs'),
     addRecentPair: (pair) => ipcRenderer.invoke('add-recent-pair', pair),
     listModels: (provider) => ipcRenderer.invoke('list-models', provider),

@@ -157,13 +157,25 @@ function buildDropdown(container, type) {
     const searchInput = document.createElement('input');
     searchInput.type = 'text';
     searchInput.placeholder = 'Search language...';
+    searchInput.setAttribute('role', 'combobox');
+    searchInput.setAttribute('aria-expanded', 'true');
+    searchInput.setAttribute('aria-controls', container.id);
+    searchInput.setAttribute('aria-autocomplete', 'list');
     searchInput.addEventListener('input', (e) => {
         filterDropdown(container, e.target.value);
+        // Typing then Enter picks the best match: a name or code that starts
+        // with the query, otherwise the first one containing it.
+        const q = e.target.value.trim().toLowerCase();
+        const options = visibleOptions(container);
+        const best = q ? options.find(o => o._searchTerms.some(t => t.startsWith(q))) : null;
+        setActiveOption(container, best || options[0] || null);
     });
+    searchInput.addEventListener('keydown', (e) => handleDropdownKey(e, container, type));
     searchWrap.appendChild(searchInput);
     container.appendChild(searchWrap);
 
     // Options — "Detect language" is offered for the source side only.
+    container.setAttribute('role', 'listbox');
     const list = type === 'source' ? [AUTO_LANG, ...LANGUAGES] : LANGUAGES;
     const fragment = document.createDocumentFragment();
     list.forEach(lang => {
@@ -171,6 +183,10 @@ function buildDropdown(container, type) {
         option.className = 'lang-option';
         if (lang.code === 'auto') option.classList.add('lang-option-auto');
         option.dataset.code = lang.code;
+        option.id = `${type}-lang-${lang.code}`;
+        // Searchable by native name, English name and code ("Deutsch", "german", "de").
+        option._searchTerms = [lang.name, lang.english, lang.code].filter(Boolean).map(t => t.toLowerCase());
+        option.setAttribute('role', 'option');
 
         const flag = document.createElement('span');
         flag.className = 'lang-flag';
@@ -178,14 +194,10 @@ function buildDropdown(container, type) {
         option.appendChild(flag);
         option.appendChild(document.createTextNode(lang.name));
 
-        option.addEventListener('click', () => {
-            if (type === 'source') {
-                currentSourceLang = lang.code;
-            } else {
-                currentTargetLang = lang.code;
-            }
-            updateLangDisplay();
-            closeAllDropdowns();
+        option.addEventListener('click', () => chooseLanguage(type, lang.code));
+        // Mouse and keyboard share one highlight, so Enter picks what is under the pointer.
+        option.addEventListener('mousemove', () => {
+            if (container._activeOption !== option) setActiveOption(container, option, { scroll: false });
         });
 
         optionsMap.set(lang.code, option);
@@ -194,25 +206,89 @@ function buildDropdown(container, type) {
     container.appendChild(fragment);
 }
 
+function chooseLanguage(type, code) {
+    if (type === 'source') {
+        currentSourceLang = code;
+    } else {
+        currentTargetLang = code;
+    }
+    updateLangDisplay();
+    closeAllDropdowns();
+    (type === 'source' ? sourceLangBtn : targetLangBtn).focus();
+}
+
+function visibleOptions(container) {
+    return [...container.querySelectorAll('.lang-option')].filter(option => option.style.display !== 'none');
+}
+
+// The keyboard highlight. Focus stays in the search field; the highlighted
+// option is announced through aria-activedescendant.
+function setActiveOption(container, option, { scroll = true } = {}) {
+    if (container._activeOption) container._activeOption.classList.remove('active');
+    container._activeOption = option;
+    const input = container.querySelector('input');
+    if (option) {
+        option.classList.add('active');
+        input.setAttribute('aria-activedescendant', option.id);
+        if (scroll) option.scrollIntoView({ block: 'nearest' });
+    } else {
+        input.removeAttribute('aria-activedescendant');
+    }
+}
+
+// Options visible in one screenful of the list, for PageUp/PageDown.
+function optionsPerPage(container, options) {
+    const height = options[0] ? options[0].offsetHeight : 0;
+    return height ? Math.max(1, Math.floor(container.clientHeight / height) - 1) : 8;
+}
+
+function handleDropdownKey(e, container, type) {
+    const options = visibleOptions(container);
+    const index = options.indexOf(container._activeOption);
+    let next = null;
+
+    switch (e.key) {
+        case 'ArrowDown':
+            next = options[Math.min(index + 1, options.length - 1)];
+            break;
+        case 'ArrowUp':
+            next = options[Math.max(index - 1, 0)];
+            break;
+        case 'PageDown':
+            next = options[Math.min(index + optionsPerPage(container, options), options.length - 1)];
+            break;
+        case 'PageUp':
+            next = options[Math.max(index - optionsPerPage(container, options), 0)];
+            break;
+        case 'Enter': {
+            e.preventDefault();
+            const option = container._activeOption && options.includes(container._activeOption) ? container._activeOption : options[0];
+            if (option) chooseLanguage(type, option.dataset.code);
+            return;
+        }
+        case 'Escape':
+            e.preventDefault();
+            e.stopPropagation();
+            closeAllDropdowns();
+            (type === 'source' ? sourceLangBtn : targetLangBtn).focus();
+            return;
+        case 'Tab':
+            closeAllDropdowns();
+            return;
+        default:
+            return;
+    }
+    e.preventDefault();
+    if (next) setActiveOption(container, next);
+}
+
 function filterDropdown(container, query) {
-    const options = container.querySelectorAll('.lang-option');
-    const q = query.toLowerCase();
-
-    // Optimization: Batch DOM updates and cache search terms
-    options.forEach(option => {
-        // Cache search text to avoid layout thrashing and string allocs
-        if (!option._searchText) {
-            option._searchText = (option.textContent || '').toLowerCase();
-            option._searchCode = (option.dataset.code || '').toLowerCase();
-        }
-
-        const shouldShow = option._searchText.includes(q) || option._searchCode.includes(q);
+    const q = query.trim().toLowerCase();
+    container.querySelectorAll('.lang-option').forEach(option => {
+        const shouldShow = !q || option._searchTerms.some(term => term.includes(q));
         const newDisplay = shouldShow ? '' : 'none';
-
-        // Only touch DOM if changed
-        if (option.style.display !== newDisplay) {
-            option.style.display = newDisplay;
-        }
+        // Only touch the DOM when the state actually changes.
+        if (option.style.display !== newDisplay) option.style.display = newDisplay;
     });
 }
 
@@ -280,11 +356,14 @@ function toggleDropdown(btn, dropdown) {
     if (!isOpen) {
         dropdown.classList.add('open');
         btn.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
         // Focus on search
         const searchInput = dropdown.querySelector('input');
         if (searchInput) {
             searchInput.value = '';
             filterDropdown(dropdown, '');
+            // Start from the language that is currently selected.
+            setActiveOption(dropdown, dropdown.querySelector('.lang-option.selected') || visibleOptions(dropdown)[0] || null);
             setTimeout(() => searchInput.focus(), 50);
         }
     }
@@ -292,7 +371,10 @@ function toggleDropdown(btn, dropdown) {
 
 function closeAllDropdowns() {
     $$('.lang-dropdown').forEach(d => d.classList.remove('open'));
-    $$('.lang-btn').forEach(b => b.classList.remove('open'));
+    $$('.lang-btn').forEach(b => {
+        b.classList.remove('open');
+        b.setAttribute('aria-expanded', 'false');
+    });
 }
 
 sourceLangBtn.addEventListener('click', (e) => {
@@ -303,6 +385,18 @@ sourceLangBtn.addEventListener('click', (e) => {
 targetLangBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     toggleDropdown(targetLangBtn, targetLangDropdown);
+});
+
+// Down/Up on a focused language button opens its list, like a native select.
+[[sourceLangBtn, sourceLangDropdown], [targetLangBtn, targetLangDropdown]].forEach(([btn, dropdown]) => {
+    btn.setAttribute('aria-haspopup', 'listbox');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.addEventListener('keydown', (e) => {
+        if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !dropdown.classList.contains('open')) {
+            e.preventDefault();
+            toggleDropdown(btn, dropdown);
+        }
+    });
 });
 
 document.addEventListener('click', (e) => {
@@ -682,19 +776,73 @@ $('#btn-history').addEventListener('click', () => {
 });
 
 // ===== History =====
-async function loadHistory() {
-    const items = await window.api.getHistory();
-    const container = $('#history-list');
+let historyItems = [];
+let historyFilter = 'all'; // 'all' | 'favorites'
+const historySearch = $('#history-search');
 
-    if (items.length === 0) {
-        container.innerHTML = `
+async function loadHistory() {
+    historyItems = await window.api.getHistory();
+    renderHistory();
+}
+
+function visibleHistoryItems() {
+    const query = historySearch.value;
+    return historyItems.filter(item =>
+        (historyFilter !== 'favorites' || item.favorite) && matchesHistoryQuery(item, query));
+}
+
+// Escapes `text` and wraps every occurrence of the query words in <mark>.
+function highlightMatches(text, query) {
+    const source = String(text || '');
+    const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return escapeHtml(source);
+
+    const lower = source.toLowerCase();
+    const marked = new Array(source.length).fill(false);
+    for (const word of words) {
+        for (let i = lower.indexOf(word); i !== -1; i = lower.indexOf(word, i + word.length)) {
+            marked.fill(true, i, i + word.length);
+        }
+    }
+    let html = '';
+    let start = 0;
+    for (let i = 1; i <= source.length; i++) {
+        if (i === source.length || marked[i] !== marked[start]) {
+            const chunk = escapeHtml(source.slice(start, i));
+            html += marked[start] ? `<mark>${chunk}</mark>` : chunk;
+            start = i;
+        }
+    }
+    return html;
+}
+
+function renderEmptyHistory(container, message) {
+    container.innerHTML = `
       <div class="empty-state">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-        <p>History is empty</p>
+        <p></p>
       </div>`;
+    container.querySelector('p').textContent = message;
+}
+
+const STAR_ICON = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>';
+const DELETE_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+
+function renderHistory() {
+    const container = $('#history-list');
+    const items = visibleHistoryItems();
+    $('#btn-export-history').disabled = items.length === 0;
+
+    if (items.length === 0) {
+        let message = 'History is empty';
+        if (historyItems.length) {
+            message = historySearch.value.trim() ? 'Nothing matches your search' : 'No favorites yet — star a translation to keep it';
+        }
+        renderEmptyHistory(container, message);
         return;
     }
 
+    const query = historySearch.value;
     container.innerHTML = '';
     const fragment = document.createDocumentFragment();
 
@@ -722,18 +870,19 @@ async function loadHistory() {
         el.innerHTML = `
       <div class="history-item-header">
         <div class="history-item-langs">${langs}</div>
-        <span class="history-item-time">${escapeHtml(timeStr)}</span>
+        <div class="history-item-meta">
+          <span class="history-item-time">${escapeHtml(timeStr)}</span>
+          <button class="history-item-star${item.favorite ? ' active' : ''}" title="${item.favorite ? 'Remove from favorites' : 'Add to favorites'}">${STAR_ICON}</button>
+          <button class="history-item-delete" title="Delete">${DELETE_ICON}</button>
+        </div>
       </div>
-      <div class="history-item-source">${escapeHtml(item.sourceText)}</div>
-      <div class="history-item-target">${escapeHtml(item.targetText)}</div>
-      <button class="history-item-delete" title="Delete">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+      <div class="history-item-source">${highlightMatches(item.sourceText, query)}</div>
+      <div class="history-item-target">${highlightMatches(item.targetText, query)}</div>
     `;
 
         // Click — load into translator
         el.addEventListener('click', (e) => {
-            if (e.target.closest('.history-item-delete')) return;
+            if (e.target.closest('button')) return;
 
             sourceText.value = item.sourceText;
             targetText.textContent = item.targetText;
@@ -747,15 +896,21 @@ async function loadHistory() {
             showView('translate');
         });
 
+        el.querySelector('.history-item-star').addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const result = await window.api.setHistoryFavorite(item.id, !item.favorite);
+            if (!result.success) return;
+            item.favorite = !item.favorite;
+            renderHistory();
+        });
+
         // Delete entry
         el.querySelector('.history-item-delete').addEventListener('click', async (e) => {
             e.stopPropagation();
             await window.api.deleteHistoryItem(item.id);
+            historyItems = historyItems.filter(entry => entry.id !== item.id);
             el.style.animation = 'fadeIn 0.2s ease reverse';
-            setTimeout(() => {
-                el.remove();
-                if (container.children.length === 0) loadHistory();
-            }, 200);
+            setTimeout(renderHistory, 200);
         });
 
         fragment.appendChild(el);
@@ -763,10 +918,37 @@ async function loadHistory() {
     container.appendChild(fragment);
 }
 
+historySearch.addEventListener('input', renderHistory);
+
+historySearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && historySearch.value) {
+        e.stopPropagation();
+        historySearch.value = '';
+        renderHistory();
+    }
+});
+
+$('#history-filter').addEventListener('click', (e) => {
+    const btn = e.target.closest('.history-filter-btn');
+    if (!btn) return;
+    historyFilter = btn.dataset.filter;
+    $$('.history-filter-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderHistory();
+});
+
+$('#btn-export-history').addEventListener('click', async () => {
+    const result = await window.api.exportHistory(visibleHistoryItems().map(item => item.id));
+    if (result.success) {
+        showToast(`Exported ${result.count} ${result.count === 1 ? 'entry' : 'entries'}`, 'success');
+    } else if (!result.cancelled) {
+        showToast(result.error || 'Export failed', 'error');
+    }
+});
+
 $('#btn-clear-history').addEventListener('click', async () => {
-    await window.api.clearHistory();
-    loadHistory();
-    showToast('History cleared', 'info');
+    const result = await window.api.clearHistory();
+    await loadHistory();
+    showToast(result.kept ? `History cleared — ${result.kept} favorite${result.kept === 1 ? '' : 's'} kept` : 'History cleared', 'info');
 });
 
 // ===== Settings: provider & models =====

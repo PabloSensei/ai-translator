@@ -1,5 +1,6 @@
 const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog, clipboard } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
 const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput } = require('./lib/prompt');
 const {
@@ -21,6 +22,7 @@ const {
   DEFAULT_ANTHROPIC_MODELS,
   getProvider
 } = require('./lib/providers');
+const { trimHistory, formatHistoryExport, EXPORT_FORMATS } = require('./lib/history');
 
 // electron-store — ESM-only module starting from v9, use dynamic import
 let Store;
@@ -438,8 +440,7 @@ function setupIPC() {
         mode: isFix ? 'fix' : 'translate',
         timestamp: new Date().toISOString()
       });
-      if (items.length > MAX_HISTORY_ITEMS) items.length = MAX_HISTORY_ITEMS;
-      historyStore.set('items', items);
+      historyStore.set('items', trimHistory(items, MAX_HISTORY_ITEMS));
 
       return { success: true, translated };
     } catch (err) {
@@ -586,9 +587,53 @@ function setupIPC() {
     return historyStore.get('items') || [];
   });
 
+  // Favourites survive "Clear"; they are removed one by one.
   ipcMain.handle('clear-history', () => {
-    historyStore.set('items', []);
+    const kept = (historyStore.get('items') || []).filter(item => item.favorite);
+    historyStore.set('items', kept);
+    return { success: true, kept: kept.length };
+  });
+
+  ipcMain.handle('set-history-favorite', (event, id, favorite) => {
+    const items = historyStore.get('items') || [];
+    const item = items.find(entry => entry.id === id);
+    if (!item) return { success: false };
+    item.favorite = Boolean(favorite);
+    historyStore.set('items', items);
     return { success: true };
+  });
+
+  // The renderer names which entries to export (what the search shows); the
+  // content always comes from the store.
+  ipcMain.handle('export-history', async (event, ids) => {
+    const wanted = new Set(Array.isArray(ids) ? ids : []);
+    const items = (historyStore.get('items') || []).filter(item => wanted.has(item.id));
+    if (!items.length) return { success: false, error: 'Nothing to export.' };
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export history',
+      defaultPath: path.join(app.getPath('documents'), `ai-translator-history-${stamp}.csv`),
+      filters: [
+        { name: 'CSV (Excel, Google Sheets)', extensions: ['csv'] },
+        { name: 'JSON', extensions: ['json'] },
+        { name: 'Markdown', extensions: ['md'] }
+      ]
+    });
+    if (canceled || !filePath) return { success: false, cancelled: true };
+
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const format = EXPORT_FORMATS.includes(ext) ? ext : 'csv';
+    const langName = (code) => {
+      const lang = resolveLanguage(code, { allowAuto: true });
+      return lang ? lang.english : code;
+    };
+    try {
+      await fs.promises.writeFile(filePath, formatHistoryExport(items, format, langName), 'utf8');
+      return { success: true, count: items.length, filePath };
+    } catch (err) {
+      return { success: false, error: `Could not write the file: ${err.message}` };
+    }
   });
 
   ipcMain.handle('delete-history-item', (event, id) => {

@@ -390,7 +390,7 @@ a:hover {
     transition: var(--transition);
 }
 
-.lang-option:hover {
+.lang-option.active {
     background: var(--bg-hover);
     color: var(--text-primary);
 }
@@ -836,6 +836,78 @@ a:hover {
     background: var(--danger-bg-hover);
 }
 
+.view-header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.secondary-btn.small {
+    padding: 8px 16px;
+}
+
+.history-toolbar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.history-toolbar input {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: var(--font);
+    font-size: 13px;
+    outline: none;
+    transition: var(--transition);
+}
+
+.history-toolbar input:focus {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.history-toolbar input::placeholder {
+    color: var(--text-hint);
+}
+
+.history-filter {
+    display: flex;
+    padding: 3px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+
+.history-filter-btn {
+    padding: 5px 12px;
+    background: none;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: var(--transition);
+}
+
+.history-filter-btn.active {
+    background: var(--accent);
+    color: #fff;
+}
+
+.history-item mark {
+    background: var(--accent-glow);
+    color: inherit;
+    border-radius: 2px;
+}
+
 .history-list {
     flex: 1;
     overflow-y: auto;
@@ -913,10 +985,18 @@ a:hover {
     white-space: nowrap;
 }
 
-.history-item-delete {
-    position: absolute;
-    top: 8px;
-    right: 8px;
+.history-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.history-item-time {
+    margin-right: 4px;
+}
+
+.history-item-delete,
+.history-item-star {
     width: 24px;
     height: 24px;
     display: flex;
@@ -931,8 +1011,25 @@ a:hover {
     opacity: 0;
 }
 
-.history-item:hover .history-item-delete {
+.history-item:hover .history-item-delete,
+.history-item:hover .history-item-star,
+.history-item-star.active,
+.history-item-delete:focus-visible,
+.history-item-star:focus-visible {
     opacity: 1;
+}
+
+.history-item-star:hover {
+    background: var(--bg-hover);
+    color: #f5b301;
+}
+
+.history-item-star.active {
+    color: #f5b301;
+}
+
+.history-item-star.active svg {
+    fill: currentColor;
 }
 
 .history-item-delete:hover {

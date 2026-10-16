@@ -176,7 +176,17 @@
     <div class="view" id="view-history">
       <div class="view-header">
         <h2>Translation History</h2>
-        <button class="header-action-btn" id="btn-clear-history">Clear All</button>
+        <div class="view-header-actions">
+          <button class="secondary-btn small" id="btn-export-history" title="Save the entries shown below to a file">Export</button>
+          <button class="header-action-btn" id="btn-clear-history" title="Delete everything except favorites">Clear</button>
+        </div>
+      </div>
+      <div class="history-toolbar">
+        <input type="search" id="history-search" placeholder="Search history..." autocomplete="off" spellcheck="false">
+        <div class="history-filter" id="history-filter" role="group" aria-label="Show">
+          <button class="history-filter-btn active" data-filter="all">All</button>
+          <button class="history-filter-btn" data-filter="favorites">★ Favorites</button>
+        </div>
       </div>
       <div class="history-list" id="history-list">
         <div class="empty-state">
