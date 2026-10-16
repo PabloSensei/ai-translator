@@ -2,10 +2,11 @@ const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, sh
 const path = require('path');
 const fs = require('fs');
 
-const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput } = require('./lib/prompt');
+const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput, NO_TEXT_MARKER } = require('./lib/prompt');
 const {
   MAX_TEXT_LENGTH,
   sanitizeString,
+  sanitizeImage,
   sanitizeProvider,
   sanitizeBareModelId,
   sanitizeOpenRouterModelId,
@@ -269,22 +270,51 @@ function toggleWindow() {
 }
 
 // --- Translate selection ---
+// The clipboard API is asynchronous (Electron 44+), and every read can fail
+// on a busy or odd clipboard owner, so failures count as "nothing there".
+//
 // Linux (X11 and most Wayland compositors) exposes the current selection as
 // the PRIMARY clipboard, so highlighted text can be read without copying it.
 // Windows and macOS have no such buffer; there the user copies first.
-function readSelectedText() {
-  if (process.platform === 'linux') {
-    const primary = clipboard.readText('selection');
+async function readSelectedText() {
+  if (process.platform === 'linux' && clipboard.selection) {
+    const primary = await clipboard.selection.readText().catch(() => '');
     if (primary && primary.trim()) return primary;
   }
-  return clipboard.readText();
+  return clipboard.readText().catch(() => '');
 }
 
-function translateSelection() {
+// A screenshot copied to the clipboard (Win+Shift+S, Cmd+Ctrl+Shift+4,
+// PrtSc on most Linux desktops), as a data URL, or '' when there is none.
+async function readClipboardImage() {
+  try {
+    for (const item of await clipboard.read()) {
+      const type = item.types.find(t => /^image\/(png|jpeg|webp|gif|bmp)$/.test(t));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      const data = Buffer.from(await blob.arrayBuffer()).toString('base64');
+      return `data:${type};base64,${data}`;
+    }
+  } catch (e) {
+    console.error('Failed to read an image from the clipboard:', e.message);
+  }
+  return '';
+}
+
+async function translateSelection() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const text = readSelectedText().trim();
+  // Text wins: a copied web image often comes with text alongside it.
+  const text = (await readSelectedText()).trim();
+  const imageUrl = text ? '' : await readClipboardImage();
+  if (mainWindow.isDestroyed()) return;
   showWindow();
-  const send = () => mainWindow.webContents.send('translate-text', text);
+  const send = () => {
+    if (imageUrl) {
+      mainWindow.webContents.send('translate-image', imageUrl);
+    } else {
+      mainWindow.webContents.send('translate-text', text);
+    }
+  };
   if (mainWindow.webContents.isLoading()) {
     mainWindow.webContents.once('did-finish-load', send);
   } else {
@@ -395,11 +425,13 @@ function setupIPC() {
     try {
       const { text, sourceLang, targetLang, style, mode } = request || {};
       const isFix = mode === 'fix';
+      // An image replaces the text: the model reads the text off the image.
+      const image = sanitizeImage(request && request.image);
 
-      if (typeof text !== 'string' || !text.trim()) {
+      if (!image && (typeof text !== 'string' || !text.trim())) {
         throw new Error('Nothing to translate.');
       }
-      if (text.length > MAX_TEXT_LENGTH) {
+      if (!image && text.length > MAX_TEXT_LENGTH) {
         throw new Error(`The text is too long (${text.length} characters). The limit is ${MAX_TEXT_LENGTH}.`);
       }
 
@@ -410,7 +442,8 @@ function setupIPC() {
       const provider = sanitizeProvider(settingsStore.get('provider'));
       const styleInstruction = getStyleInstruction(style, settingsStore.get('customStyles'));
       const prompt = buildPrompt({
-        text,
+        text: image ? '' : text,
+        image: Boolean(image),
         sourceLang: source.english,
         targetLang: target ? target.english : '',
         mode: isFix ? 'fix' : 'translate',
@@ -420,20 +453,23 @@ function setupIPC() {
       const onDelta = id === null ? undefined : (delta) => {
         if (!event.sender.isDestroyed()) event.sender.send('translate-delta', { requestId: id, delta });
       };
-      const raw = await getProvider(provider).generate(prompt, getApiKey(provider), getModelFor(provider), {
+      const raw = await getProvider(provider).generate({ ...prompt, image }, getApiKey(provider), getModelFor(provider), {
         signal: controller.signal,
         onDelta
       });
       if (controller.signal.aborted) return { success: false, cancelled: true };
       const translated = cleanModelOutput(raw);
       if (!translated) throw new Error('The model returned an empty response.');
+      if (image && translated === NO_TEXT_MARKER) throw new Error('No text found in the image.');
 
       // Save to history. Languages are stored as codes; older entries hold
       // display names and are still resolved by the renderer.
       const items = historyStore.get('items') || [];
       items.unshift({
         id: Date.now(),
-        sourceText: text,
+        // The image itself is not kept: it can be large and may be private.
+        sourceText: image ? '' : text,
+        ...(image ? { image: true } : {}),
         targetText: translated,
         sourceLang: source.code,
         targetLang: target ? target.code : '',
@@ -450,6 +486,8 @@ function setupIPC() {
       if (id !== null) inflightTranslations.delete(id);
     }
   });
+
+  ipcMain.handle('read-clipboard-image', () => readClipboardImage());
 
   ipcMain.on('cancel-translation', (event, requestId) => {
     const controller = inflightTranslations.get(requestId);
@@ -625,7 +663,8 @@ function setupIPC() {
     const ext = path.extname(filePath).slice(1).toLowerCase();
     const format = EXPORT_FORMATS.includes(ext) ? ext : 'csv';
     const langName = (code) => {
-      const lang = resolveLanguage(code, { allowAuto: true });
+      if (code === 'auto') return 'Auto-detect';
+      const lang = resolveLanguage(code);
       return lang ? lang.english : code;
     };
     try {

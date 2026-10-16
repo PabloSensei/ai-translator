@@ -86,3 +86,17 @@ test('aborting the signal stops the request', async () => {
   setTimeout(() => controller.abort(), 10);
   await assert.rejects(pending, (err) => err.name === 'AbortError');
 });
+
+test('an attached image is sent as inline data before the instruction', async () => {
+  globalThis.fetch = async (url, init) => {
+    lastCall = { url: String(url), init };
+    return sseResponse(['Hallo']);
+  };
+  const image = { mediaType: 'image/jpeg', data: '/9j/4AAQ' };
+  await getProvider('gemini').generate({ system: 's', user: 'Translate the text in this image.', image }, 'AIza-test', 'gemini-2.5-flash');
+  const body = JSON.parse(lastCall.init.body);
+  assert.deepStrictEqual(body.contents[0].parts, [
+    { inlineData: { mimeType: 'image/jpeg', data: '/9j/4AAQ' } },
+    { text: 'Translate the text in this image.' }
+  ]);
+});

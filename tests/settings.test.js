@@ -99,3 +99,14 @@ test('isAllowedExternalUrl', () => {
     assert.strictEqual(s.isAllowedExternalUrl(bad, allow), false, String(bad));
   }
 });
+
+test('sanitizeImage accepts PNG/JPEG base64 and rejects everything else', () => {
+  assert.strictEqual(s.sanitizeImage(undefined), null);
+  assert.strictEqual(s.sanitizeImage(null), null);
+  assert.deepStrictEqual(s.sanitizeImage({ mediaType: 'image/png', data: 'iVBORw0KGgo=', extra: 1 }), { mediaType: 'image/png', data: 'iVBORw0KGgo=' });
+  assert.throws(() => s.sanitizeImage({ mediaType: 'image/svg+xml', data: 'PHN2Zz4=' }), /Unsupported/);
+  assert.throws(() => s.sanitizeImage({ mediaType: 'image/png', data: '' }), /invalid/);
+  assert.throws(() => s.sanitizeImage({ mediaType: 'image/png', data: 'data:image/png;base64,AAAA' }), /invalid/);
+  assert.throws(() => s.sanitizeImage({ mediaType: 'image/jpeg', data: 'A'.repeat(s.MAX_IMAGE_BASE64_LENGTH + 4) }), /too large/);
+  assert.throws(() => s.sanitizeImage('image'), /Unsupported/);
+});

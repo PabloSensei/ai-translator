@@ -321,7 +321,8 @@ function updateActionLabels() {
 
     sourceText.placeholder = isFix ? 'Enter text to fix...' : 'Enter text to translate...';
 
-    const placeholder = targetText.querySelector('.placeholder');
+    // An error message is also a .placeholder; it must stay until the next request.
+    const placeholder = targetText.querySelector('.placeholder:not(.error-text)');
     if (placeholder && activeRequestId === null) {
         placeholder.textContent = isFix
             ? 'Corrected text will appear here...'
@@ -424,11 +425,13 @@ swapBtn.addEventListener('click', () => {
     updateLangDisplay();
 
     // Change texts
-    const tempText = sourceText.value;
+    const tempText = attachedImage ? '' : sourceText.value;
     const currentTarget = targetText.textContent;
     const placeholder = targetText.querySelector('.placeholder');
 
     if (currentTarget && !placeholder) {
+        // The translation of an image becomes editable text.
+        if (attachedImage) removeImage();
         sourceText.value = currentTarget;
         if (tempText) {
             targetText.textContent = tempText;
@@ -625,8 +628,10 @@ window.api.onTranslateDelta(({ requestId, delta }) => {
 });
 
 async function doTranslate() {
-    const text = sourceText.value.trim();
-    if (!text) return;
+    // An attached image takes the place of the text.
+    const image = attachedImage ? { mediaType: attachedImage.mediaType, data: attachedImage.data } : null;
+    const text = image ? '' : sourceText.value.trim();
+    if (!text && !image) return;
 
     // A new request replaces one that is still running.
     if (activeRequestId !== null) stopTranslation();
@@ -655,6 +660,7 @@ async function doTranslate() {
         const result = await window.api.translate({
             requestId,
             text,
+            ...(image ? { image } : {}),
             sourceLang,
             targetLang,
             style: currentStyle,
@@ -710,8 +716,160 @@ window.api.onTranslateText((text) => {
         return;
     }
     setMode('translate');
+    if (attachedImage) removeImage();
     sourceText.value = text;
     doTranslate();
+});
+
+// ===== Image input (screenshots) =====
+// The image is decoded and re-encoded here, so every format the browser can
+// read (WebP, GIF, BMP, ...) reaches the providers as PNG or JPEG, and large
+// screenshots are scaled down to a size the vision models handle well.
+const MAX_IMAGE_EDGE = 2000;
+const MAX_PNG_BYTES = 3.5 * 1024 * 1024;
+let attachedImage = null; // { mediaType, data (base64), url (data URL) }
+
+const imageAttachment = $('#image-attachment');
+const dropOverlay = $('#drop-overlay');
+
+function blobToDataUrl(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
+}
+
+function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(blob => (blob ? resolve(blob) : reject(new Error('encode failed'))), type, quality);
+    });
+}
+
+async function prepareImage(blob) {
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext('2d');
+    // JPEG has no alpha: give transparent areas a white backing.
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+
+    // PNG keeps screenshot text crisp; photos that come out huge go JPEG.
+    let encoded = await canvasToBlob(canvas, 'image/png');
+    if (encoded.size > MAX_PNG_BYTES) encoded = await canvasToBlob(canvas, 'image/jpeg', 0.9);
+
+    const url = await blobToDataUrl(encoded);
+    return { mediaType: encoded.type, data: url.slice(url.indexOf(',') + 1), url };
+}
+
+async function attachImage(blob) {
+    if (!blob || !/^image\//.test(blob.type || 'image/')) {
+        showToast('That file is not an image', 'error');
+        return false;
+    }
+    try {
+        attachedImage = await prepareImage(blob);
+    } catch (e) {
+        showToast('Could not read this image', 'error');
+        return false;
+    }
+    $('#image-preview').src = attachedImage.url;
+    imageAttachment.hidden = false;
+    sourceText.hidden = true;
+    resetTargetPlaceholder();
+    imageAttachment.focus();
+    return true;
+}
+
+function removeImage() {
+    attachedImage = null;
+    $('#image-preview').removeAttribute('src');
+    imageAttachment.hidden = true;
+    sourceText.hidden = false;
+    sourceText.focus();
+}
+
+function dataUrlToBlob(dataUrl) {
+    const [header, base64] = dataUrl.split(',');
+    const type = (header.match(/^data:([^;]+)/) || [])[1] || 'image/png';
+    const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    return new Blob([bytes], { type });
+}
+
+function imageFromClipboardData(data) {
+    if (!data) return null;
+    const item = [...data.items].find(i => i.kind === 'file' && i.type.startsWith('image/'));
+    return item ? item.getAsFile() : null;
+}
+
+$('#btn-remove-image').addEventListener('click', removeImage);
+$('#btn-pick-image').addEventListener('click', () => $('#image-file-input').click());
+$('#image-file-input').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (file) attachImage(file);
+});
+
+imageAttachment.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') doTranslate();
+    if (e.key === 'Delete' || e.key === 'Backspace') removeImage();
+});
+
+// Ctrl+V with an image on the clipboard, in the text field or anywhere on
+// the translate screen outside other inputs.
+document.addEventListener('paste', (e) => {
+    if (!$('#view-translate').classList.contains('active')) return;
+    const target = e.target;
+    const inOtherField = target !== sourceText && target.closest && target.closest('input, textarea, [contenteditable]');
+    if (inOtherField) return;
+    const file = imageFromClipboardData(e.clipboardData);
+    if (!file) return;
+    e.preventDefault();
+    attachImage(file);
+});
+
+// Drag and drop onto the source panel. Dragged-over children fire their own
+// enter/leave events, so a counter tracks whether the pointer is still inside.
+const sourcePanel = $('.text-area-wrapper.source');
+let dragDepth = 0;
+const isFileDrag = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+
+sourcePanel.addEventListener('dragenter', (e) => {
+    if (!isFileDrag(e)) return;
+    dragDepth++;
+    dropOverlay.hidden = false;
+});
+sourcePanel.addEventListener('dragleave', () => {
+    if (dragDepth > 0 && --dragDepth === 0) dropOverlay.hidden = true;
+});
+sourcePanel.addEventListener('drop', (e) => {
+    dragDepth = 0;
+    dropOverlay.hidden = true;
+    const file = e.dataTransfer && e.dataTransfer.files[0];
+    if (file) {
+        e.preventDefault();
+        attachImage(file);
+    }
+});
+// Anywhere else, a dropped file must not replace the page.
+document.addEventListener('dragover', (e) => {
+    if (isFileDrag(e)) e.preventDefault();
+});
+document.addEventListener('drop', (e) => {
+    if (isFileDrag(e)) e.preventDefault();
+});
+
+// Screenshot on the clipboard + the "translate selection" hotkey.
+window.api.onTranslateImage(async (dataUrl) => {
+    showView('translate');
+    setMode('translate');
+    if (await attachImage(dataUrlToBlob(dataUrl))) doTranslate();
 });
 
 function showError(message) {
@@ -724,6 +882,7 @@ function showError(message) {
 
 // ===== Text Actions =====
 $('#btn-clear').addEventListener('click', () => {
+    if (attachedImage) removeImage();
     sourceText.value = '';
     resetTargetPlaceholder();
     sourceText.focus();
@@ -732,10 +891,21 @@ $('#btn-clear').addEventListener('click', () => {
 $('#btn-paste').addEventListener('click', async () => {
     try {
         const text = await navigator.clipboard.readText();
-        sourceText.value = text;
-        sourceText.focus();
+        if (text) {
+            if (attachedImage) removeImage();
+            sourceText.value = text;
+            sourceText.focus();
+            return;
+        }
+        // No text: maybe a screenshot.
+        const imageUrl = await window.api.readClipboardImage();
+        if (imageUrl) {
+            await attachImage(dataUrlToBlob(imageUrl));
+        } else {
+            showToast('The clipboard is empty', 'info');
+        }
     } catch (e) {
-        showToast('Failed to paste text', 'error');
+        showToast('Failed to paste', 'error');
     }
 });
 
@@ -876,7 +1046,7 @@ function renderHistory() {
           <button class="history-item-delete" title="Delete">${DELETE_ICON}</button>
         </div>
       </div>
-      <div class="history-item-source">${highlightMatches(item.sourceText, query)}</div>
+      <div class="history-item-source">${item.image ? '<span class="history-item-image">🖼 Text from an image</span>' : highlightMatches(item.sourceText, query)}</div>
       <div class="history-item-target">${highlightMatches(item.targetText, query)}</div>
     `;
 
@@ -884,7 +1054,8 @@ function renderHistory() {
         el.addEventListener('click', (e) => {
             if (e.target.closest('button')) return;
 
-            sourceText.value = item.sourceText;
+            if (attachedImage) removeImage();
+            sourceText.value = item.sourceText || '';
             targetText.textContent = item.targetText;
 
             setMode(item.mode === 'fix' ? 'fix' : 'translate');

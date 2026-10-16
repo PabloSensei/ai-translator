@@ -133,7 +133,26 @@
       <div class="translation-areas">
         <div class="text-area-wrapper source">
           <textarea id="source-text" placeholder="Enter text to translate..." spellcheck="false"></textarea>
+          <div class="image-attachment" id="image-attachment" tabindex="0" hidden>
+            <img id="image-preview" alt="Attached image">
+            <button class="image-remove" id="btn-remove-image" title="Remove image">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="drop-overlay" id="drop-overlay" hidden>Drop an image to translate the text in it</div>
           <div class="text-area-actions">
+            <span class="image-hint" id="image-hint">Paste or drop a screenshot to translate it</span>
+            <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" hidden>
+            <button class="action-btn" id="btn-pick-image" title="Translate text from an image">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </button>
             <button class="action-btn" id="btn-clear" title="Clear">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />

@@ -63,3 +63,8 @@ test('Markdown export quotes the original and marks favourites', () => {
 test('an unknown format is rejected', () => {
   assert.throws(() => formatHistoryExport([], 'xml'), /Unknown export format/);
 });
+
+test('image entries export a placeholder instead of an empty original', () => {
+  const out = JSON.parse(formatHistoryExport([entry(1, { image: true, sourceText: '' })], 'json'));
+  assert.strictEqual(out[0].sourceText, '(image)');
+});

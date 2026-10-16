@@ -32,9 +32,10 @@
 - 🌓 **Light, Dark & System Themes** — switch from the title bar or follow the OS theme
 - ⚡ **Instant, Streamed Translation** — use `Ctrl+Enter` or the "Translate" button; the result appears word by word as it is generated, and **Stop** cancels it
 - 📌 **Translate Selection** — copy text in any app and press `Ctrl+Shift+Y`: the translator pops up and translates it (on Linux the highlighted text is used directly, no copy needed)
+- 🖼️ **Translate Screenshots** — paste (`Ctrl+V`), drop or pick an image, or copy a screenshot and press `Ctrl+Shift+Y`: the model reads the text in it and translates it
 - 🔥 **Gemini, Claude & OpenRouter** — pick from the latest Gemini models (including Gemini 3.8 Flash), Anthropic's Claude models (Opus 5.5, Sonnet 5.5, Haiku 5.5), or plug in an OpenRouter key and choose from its whole catalogue
 - 🔄 **Quick Language Swap** — the swap button instantly switches languages and text
-- 📋 **Translation History** — automatically saves the last 100 translations
+- 📋 **Translation History** — the last 100 translations, with search, ★ favorites (kept forever) and export to CSV, JSON or Markdown
 - ⌨️ **Global Hotkey** — summon the translator from any application (default `Ctrl+Shift+T`)
 - 🎯 **Recent Language Pairs** — the quick-access row is built from the pairs you actually use
 - 🔒 **System Tray** — runs in the background and is always at your fingertips
@@ -107,6 +108,11 @@ npm start
 
 The row under the language bar shows the language pairs you used most recently — click one to restore it.
 
+### Text from Images
+Paste a screenshot with `Ctrl+V`, drop an image file onto the input panel, or click the 🖼 button to pick one, then press **Translate**. The model reads the text in the image and translates it (or, in *Fix text* mode, corrects it). Copying a screenshot (`Win+Shift+S`, `Cmd+Ctrl+Shift+4`, `PrtSc`) and pressing the *Translate selection* hotkey does the same in one step.
+
+Works with Gemini and Claude models, and with OpenRouter models that accept images. Images are scaled down to 2000 px on the long side before sending; they are not stored in the history.
+
 ### Translate / Fix text
 The toggle above the language bar switches between the two modes:
 
@@ -156,14 +162,16 @@ Settings → About → **Check for updates** compares your version against the l
 | Hotkey | Default | What it does |
 |--------|---------|--------------|
 | Show / hide | `Ctrl+Shift+T` | Toggles the translator window |
-| Translate selection | `Ctrl+Shift+Y` | Opens the translator with the copied text and translates it. On Linux it takes the highlighted text (PRIMARY selection) directly |
+| Translate selection | `Ctrl+Shift+Y` | Opens the translator with the copied text — or a copied screenshot — and translates it. On Linux it takes the highlighted text (PRIMARY selection) directly |
 
 Both are configurable in ⚙️ Settings: click the field and press the new combination. *Backspace* in the *Translate selection* field disables that hotkey. The tray menu has a **Translate Clipboard** item that does the same.
 
 ### History
-- All translations are saved automatically
+- Click 🕐 to view your history; the last 100 translations are kept
 - Click an entry to use it again
-- Click 🕐 to view your history
+- **Search** filters by words in the original or the translation
+- ★ marks a favorite: favorites are never pushed out by new translations, survive **Clear**, and have their own filter
+- **Export** saves the entries currently shown as CSV (opens in Excel / Google Sheets), JSON or Markdown
 
 ## 🛠️ Technologies
 
@@ -184,6 +192,7 @@ ai-translator/
 ├── lib/
 │   ├── providers.js # Gemini, Anthropic and OpenRouter clients
 │   ├── prompt.js    # Prompt building and translation styles
+│   ├── history.js   # History trimming and export formats
 │   └── settings.js  # Validation of everything that crosses IPC
 ├── languages.js     # Language list shared by main and renderer
 ├── preload.js       # Preload script, bridge between main and renderer

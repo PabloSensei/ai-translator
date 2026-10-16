@@ -1335,3 +1335,81 @@ body::after {
 .link-btn:hover {
     text-decoration: underline;
 }
+
+/* ===== Image (screenshot) input ===== */
+.image-attachment {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    outline: none;
+}
+
+.image-attachment[hidden],
+.drop-overlay[hidden] {
+    display: none;
+}
+
+.image-attachment img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+}
+
+.image-remove {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    border: none;
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.image-remove:hover {
+    background: var(--error);
+}
+
+.drop-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+    background: var(--bg-secondary);
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius);
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.image-hint {
+    margin-right: auto;
+    align-self: center;
+    font-size: 11px;
+    color: var(--text-hint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-item-image {
+    font-style: italic;
+}
