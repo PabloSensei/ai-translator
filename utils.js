@@ -65,6 +65,17 @@ function keyEventToAccelerator(e) {
     return { modifiers, key, accelerator };
 }
 
+/**
+ * True when every whitespace-separated word of `query` occurs in the history
+ * entry's original or result (case-insensitive). An empty query matches all.
+ */
+function matchesHistoryQuery(item, query) {
+    const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) return true;
+    const haystack = `${item.sourceText || ''}\n${item.targetText || ''}`.toLowerCase();
+    return words.every(word => haystack.includes(word));
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { escapeHtml, keyEventToAccelerator };
+    module.exports = { escapeHtml, keyEventToAccelerator, matchesHistoryQuery };
 }

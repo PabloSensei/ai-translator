@@ -196,3 +196,16 @@ test('lists models from the Models API', async () => {
     { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5' }
   ]);
 });
+
+test('an attached image goes first, as a base64 image block', async () => {
+  nextResponse = message([{ type: 'text', text: 'Hallo' }]);
+  const image = { mediaType: 'image/png', data: 'iVBORw0KGgo=' };
+  await provider.generate({ system: 'Translate the text in the image.', user: 'Translate the text in this image.', image }, 'sk-ant-test', 'claude-opus-5-5');
+  assert.deepStrictEqual(lastRequest.body.messages, [{
+    role: 'user',
+    content: [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' } },
+      { type: 'text', text: 'Translate the text in this image.' }
+    ]
+  }]);
+});

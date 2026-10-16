@@ -1,10 +1,12 @@
 const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog, clipboard } = require('electron');
 const path = require('path');
+const fs = require('fs');
 
-const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput } = require('./lib/prompt');
+const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput, NO_TEXT_MARKER } = require('./lib/prompt');
 const {
   MAX_TEXT_LENGTH,
   sanitizeString,
+  sanitizeImage,
   sanitizeProvider,
   sanitizeBareModelId,
   sanitizeOpenRouterModelId,
@@ -21,6 +23,8 @@ const {
   DEFAULT_ANTHROPIC_MODELS,
   getProvider
 } = require('./lib/providers');
+const { trimHistory, formatHistoryExport, EXPORT_FORMATS } = require('./lib/history');
+const { createUpdater, CAN_INSTALL_UPDATES, CHECK_DELAY_MS, CHECK_INTERVAL_MS, RELEASES_URL } = require('./lib/updater');
 
 // electron-store — ESM-only module starting from v9, use dynamic import
 let Store;
@@ -93,7 +97,9 @@ async function initStores() {
       anthropicModel: DEFAULT_ANTHROPIC_MODEL,
       theme: 'dark',
       style: 'neutral',
-      customStyles: []
+      customStyles: [],
+      // Download new versions in the background; they install on the next quit.
+      autoUpdate: true
     }
   });
 
@@ -215,11 +221,8 @@ function watchSystemTheme() {
 }
 
 // --- Tray Icon ---
-function createTray() {
-  const iconPath = path.join(__dirname, 'assets', 'icon_tray.png');
-  tray = new Tray(iconPath);
-
-  const contextMenu = Menu.buildFromTemplate([
+function buildTrayMenu() {
+  const template = [
     {
       label: 'Show / Hide',
       click: () => toggleWindow()
@@ -228,18 +231,30 @@ function createTray() {
       label: 'Translate Clipboard',
       click: () => translateSelection()
     },
-    { type: 'separator' },
-    {
-      label: 'Quit',
-      click: () => {
-        app.isQuitting = true;
-        app.quit();
-      }
+    { type: 'separator' }
+  ];
+  if (updater && updater.status.state === 'downloaded') {
+    template.push({
+      label: `Restart to Install v${updater.status.version}`,
+      click: () => installUpdate()
+    }, { type: 'separator' });
+  }
+  template.push({
+    label: 'Quit',
+    click: () => {
+      app.isQuitting = true;
+      app.quit();
     }
-  ]);
+  });
+  return Menu.buildFromTemplate(template);
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, 'assets', 'icon_tray.png');
+  tray = new Tray(iconPath);
 
   tray.setToolTip('AI Translator');
-  tray.setContextMenu(contextMenu);
+  tray.setContextMenu(buildTrayMenu());
 
   tray.on('double-click', () => toggleWindow());
   // On Windows a single click on a tray icon is the expected way to open an app.
@@ -267,22 +282,51 @@ function toggleWindow() {
 }
 
 // --- Translate selection ---
+// The clipboard API is asynchronous (Electron 44+), and every read can fail
+// on a busy or odd clipboard owner, so failures count as "nothing there".
+//
 // Linux (X11 and most Wayland compositors) exposes the current selection as
 // the PRIMARY clipboard, so highlighted text can be read without copying it.
 // Windows and macOS have no such buffer; there the user copies first.
-function readSelectedText() {
-  if (process.platform === 'linux') {
-    const primary = clipboard.readText('selection');
+async function readSelectedText() {
+  if (process.platform === 'linux' && clipboard.selection) {
+    const primary = await clipboard.selection.readText().catch(() => '');
     if (primary && primary.trim()) return primary;
   }
-  return clipboard.readText();
+  return clipboard.readText().catch(() => '');
 }
 
-function translateSelection() {
+// A screenshot copied to the clipboard (Win+Shift+S, Cmd+Ctrl+Shift+4,
+// PrtSc on most Linux desktops), as a data URL, or '' when there is none.
+async function readClipboardImage() {
+  try {
+    for (const item of await clipboard.read()) {
+      const type = item.types.find(t => /^image\/(png|jpeg|webp|gif|bmp)$/.test(t));
+      if (!type) continue;
+      const blob = await item.getType(type);
+      const data = Buffer.from(await blob.arrayBuffer()).toString('base64');
+      return `data:${type};base64,${data}`;
+    }
+  } catch (e) {
+    console.error('Failed to read an image from the clipboard:', e.message);
+  }
+  return '';
+}
+
+async function translateSelection() {
   if (!mainWindow || mainWindow.isDestroyed()) return;
-  const text = readSelectedText().trim();
+  // Text wins: a copied web image often comes with text alongside it.
+  const text = (await readSelectedText()).trim();
+  const imageUrl = text ? '' : await readClipboardImage();
+  if (mainWindow.isDestroyed()) return;
   showWindow();
-  const send = () => mainWindow.webContents.send('translate-text', text);
+  const send = () => {
+    if (imageUrl) {
+      mainWindow.webContents.send('translate-image', imageUrl);
+    } else {
+      mainWindow.webContents.send('translate-text', text);
+    }
+  };
   if (mainWindow.webContents.isLoading()) {
     mainWindow.webContents.once('did-finish-load', send);
   } else {
@@ -322,7 +366,45 @@ function registerHotkeys(hotkeys = savedHotkeys()) {
   return failed;
 }
 
-// --- Update check ---
+// --- Automatic updates ---
+// Only a packaged build can update itself; `npm start` falls back to the
+// GitHub release check below.
+let updater = null;
+
+function initAutoUpdater() {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try {
+    ({ autoUpdater } = require('electron-updater'));
+  } catch (err) {
+    console.error('electron-updater is unavailable:', err.message);
+    return;
+  }
+  autoUpdater.logger = console;
+
+  updater = createUpdater({
+    updater: autoUpdater,
+    currentVersion: app.getVersion(),
+    autoDownload: settingsStore.get('autoUpdate') !== false,
+    canInstall: CAN_INSTALL_UPDATES,
+    onStatus: (status) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-status', status);
+      if (tray && !tray.isDestroyed()) tray.setContextMenu(buildTrayMenu());
+    }
+  });
+
+  setTimeout(() => updater.check(), CHECK_DELAY_MS).unref();
+  setInterval(() => updater.check(), CHECK_INTERVAL_MS).unref();
+}
+
+function installUpdate() {
+  // quitAndInstall closes the windows before 'before-quit' fires, so the
+  // hide-to-tray handler has to be told now or it would cancel the quit.
+  app.isQuitting = true;
+  if (!updater || !updater.install()) app.isQuitting = false;
+}
+
+// --- Update check (without electron-updater) ---
 async function checkForUpdates() {
   const currentVersion = app.getVersion();
   const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
@@ -344,7 +426,7 @@ async function checkForUpdates() {
     currentVersion,
     latestVersion,
     updateAvailable: Boolean(latestVersion) && isNewerVersion(latestVersion, currentVersion),
-    releaseUrl: `https://github.com/${GITHUB_REPO}/releases/latest`
+    releaseUrl: RELEASES_URL(GITHUB_REPO)
   };
 }
 
@@ -357,7 +439,7 @@ const ALLOWED_EXTERNAL_URLS = [
   'https://platform.claude.com/settings/keys',
   `https://github.com/${GITHUB_REPO}`,
   `https://github.com/${GITHUB_REPO}/releases`,
-  `https://github.com/${GITHUB_REPO}/releases/latest`
+  RELEASES_URL(GITHUB_REPO)
 ];
 
 function getApiKey(provider) {
@@ -393,11 +475,13 @@ function setupIPC() {
     try {
       const { text, sourceLang, targetLang, style, mode } = request || {};
       const isFix = mode === 'fix';
+      // An image replaces the text: the model reads the text off the image.
+      const image = sanitizeImage(request && request.image);
 
-      if (typeof text !== 'string' || !text.trim()) {
+      if (!image && (typeof text !== 'string' || !text.trim())) {
         throw new Error('Nothing to translate.');
       }
-      if (text.length > MAX_TEXT_LENGTH) {
+      if (!image && text.length > MAX_TEXT_LENGTH) {
         throw new Error(`The text is too long (${text.length} characters). The limit is ${MAX_TEXT_LENGTH}.`);
       }
 
@@ -408,7 +492,8 @@ function setupIPC() {
       const provider = sanitizeProvider(settingsStore.get('provider'));
       const styleInstruction = getStyleInstruction(style, settingsStore.get('customStyles'));
       const prompt = buildPrompt({
-        text,
+        text: image ? '' : text,
+        image: Boolean(image),
         sourceLang: source.english,
         targetLang: target ? target.english : '',
         mode: isFix ? 'fix' : 'translate',
@@ -418,28 +503,30 @@ function setupIPC() {
       const onDelta = id === null ? undefined : (delta) => {
         if (!event.sender.isDestroyed()) event.sender.send('translate-delta', { requestId: id, delta });
       };
-      const raw = await getProvider(provider).generate(prompt, getApiKey(provider), getModelFor(provider), {
+      const raw = await getProvider(provider).generate({ ...prompt, image }, getApiKey(provider), getModelFor(provider), {
         signal: controller.signal,
         onDelta
       });
       if (controller.signal.aborted) return { success: false, cancelled: true };
       const translated = cleanModelOutput(raw);
       if (!translated) throw new Error('The model returned an empty response.');
+      if (image && translated === NO_TEXT_MARKER) throw new Error('No text found in the image.');
 
       // Save to history. Languages are stored as codes; older entries hold
       // display names and are still resolved by the renderer.
       const items = historyStore.get('items') || [];
       items.unshift({
         id: Date.now(),
-        sourceText: text,
+        // The image itself is not kept: it can be large and may be private.
+        sourceText: image ? '' : text,
+        ...(image ? { image: true } : {}),
         targetText: translated,
         sourceLang: source.code,
         targetLang: target ? target.code : '',
         mode: isFix ? 'fix' : 'translate',
         timestamp: new Date().toISOString()
       });
-      if (items.length > MAX_HISTORY_ITEMS) items.length = MAX_HISTORY_ITEMS;
-      historyStore.set('items', items);
+      historyStore.set('items', trimHistory(items, MAX_HISTORY_ITEMS));
 
       return { success: true, translated };
     } catch (err) {
@@ -449,6 +536,12 @@ function setupIPC() {
       if (id !== null) inflightTranslations.delete(id);
     }
   });
+
+  ipcMain.handle('read-clipboard-image', () => readClipboardImage());
+
+  ipcMain.handle('get-update-status', () => (updater ? updater.status : null));
+  ipcMain.handle('download-update', () => (updater ? updater.download() : null));
+  ipcMain.on('install-update', () => installUpdate());
 
   ipcMain.on('cancel-translation', (event, requestId) => {
     const controller = inflightTranslations.get(requestId);
@@ -473,6 +566,9 @@ function setupIPC() {
       customStyles: sanitizeCustomStyles(settingsStore.get('customStyles')),
       defaultGeminiModels: DEFAULT_GEMINI_MODELS,
       defaultAnthropicModels: DEFAULT_ANTHROPIC_MODELS,
+      autoUpdate: settingsStore.get('autoUpdate') !== false,
+      // False in development; on macOS updates are announced but not installed.
+      autoUpdateSupported: Boolean(updater) && CAN_INSTALL_UPDATES,
       version: app.getVersion()
     };
   });
@@ -506,6 +602,10 @@ function setupIPC() {
     }
     if (settings.customStyles !== undefined) {
       settingsStore.set('customStyles', sanitizeCustomStyles(settings.customStyles));
+    }
+    if (settings.autoUpdate !== undefined) {
+      settingsStore.set('autoUpdate', Boolean(settings.autoUpdate));
+      if (updater) updater.setAutoDownload(Boolean(settings.autoUpdate));
     }
     if (settings.theme !== undefined) {
       const theme = ['dark', 'light', 'system'].includes(settings.theme) ? settings.theme : 'dark';
@@ -574,6 +674,17 @@ function setupIPC() {
 
   // Updates
   ipcMain.handle('check-for-updates', async () => {
+    if (updater) {
+      const status = await updater.check();
+      return {
+        success: status.state !== 'error',
+        error: status.error,
+        currentVersion: status.currentVersion,
+        latestVersion: status.version || null,
+        updateAvailable: ['available', 'downloading', 'downloaded'].includes(status.state),
+        status
+      };
+    }
     try {
       return await checkForUpdates();
     } catch (err) {
@@ -586,9 +697,54 @@ function setupIPC() {
     return historyStore.get('items') || [];
   });
 
+  // Favourites survive "Clear"; they are removed one by one.
   ipcMain.handle('clear-history', () => {
-    historyStore.set('items', []);
+    const kept = (historyStore.get('items') || []).filter(item => item.favorite);
+    historyStore.set('items', kept);
+    return { success: true, kept: kept.length };
+  });
+
+  ipcMain.handle('set-history-favorite', (event, id, favorite) => {
+    const items = historyStore.get('items') || [];
+    const item = items.find(entry => entry.id === id);
+    if (!item) return { success: false };
+    item.favorite = Boolean(favorite);
+    historyStore.set('items', items);
     return { success: true };
+  });
+
+  // The renderer names which entries to export (what the search shows); the
+  // content always comes from the store.
+  ipcMain.handle('export-history', async (event, ids) => {
+    const wanted = new Set(Array.isArray(ids) ? ids : []);
+    const items = (historyStore.get('items') || []).filter(item => wanted.has(item.id));
+    if (!items.length) return { success: false, error: 'Nothing to export.' };
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export history',
+      defaultPath: path.join(app.getPath('documents'), `ai-translator-history-${stamp}.csv`),
+      filters: [
+        { name: 'CSV (Excel, Google Sheets)', extensions: ['csv'] },
+        { name: 'JSON', extensions: ['json'] },
+        { name: 'Markdown', extensions: ['md'] }
+      ]
+    });
+    if (canceled || !filePath) return { success: false, cancelled: true };
+
+    const ext = path.extname(filePath).slice(1).toLowerCase();
+    const format = EXPORT_FORMATS.includes(ext) ? ext : 'csv';
+    const langName = (code) => {
+      if (code === 'auto') return 'Auto-detect';
+      const lang = resolveLanguage(code);
+      return lang ? lang.english : code;
+    };
+    try {
+      await fs.promises.writeFile(filePath, formatHistoryExport(items, format, langName), 'utf8');
+      return { success: true, count: items.length, filePath };
+    } catch (err) {
+      return { success: false, error: `Could not write the file: ${err.message}` };
+    }
   });
 
   ipcMain.handle('delete-history-item', (event, id) => {
@@ -658,6 +814,7 @@ if (!app.requestSingleInstanceLock()) {
     createTray();
     registerHotkeys();
     watchSystemTheme();
+    initAutoUpdater();
   });
 }
 

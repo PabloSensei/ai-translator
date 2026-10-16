@@ -133,7 +133,26 @@
       <div class="translation-areas">
         <div class="text-area-wrapper source">
           <textarea id="source-text" placeholder="Enter text to translate..." spellcheck="false"></textarea>
+          <div class="image-attachment" id="image-attachment" tabindex="0" hidden>
+            <img id="image-preview" alt="Attached image">
+            <button class="image-remove" id="btn-remove-image" title="Remove image">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+          <div class="drop-overlay" id="drop-overlay" hidden>Drop an image to translate the text in it</div>
           <div class="text-area-actions">
+            <span class="image-hint" id="image-hint">Paste or drop a screenshot to translate it</span>
+            <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" hidden>
+            <button class="action-btn" id="btn-pick-image" title="Translate text from an image">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </button>
             <button class="action-btn" id="btn-clear" title="Clear">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="18" y1="6" x2="6" y2="18" />
@@ -176,7 +195,17 @@
     <div class="view" id="view-history">
       <div class="view-header">
         <h2>Translation History</h2>
-        <button class="header-action-btn" id="btn-clear-history">Clear All</button>
+        <div class="view-header-actions">
+          <button class="secondary-btn small" id="btn-export-history" title="Save the entries shown below to a file">Export</button>
+          <button class="header-action-btn" id="btn-clear-history" title="Delete everything except favorites">Clear</button>
+        </div>
+      </div>
+      <div class="history-toolbar">
+        <input type="search" id="history-search" placeholder="Search history..." autocomplete="off" spellcheck="false">
+        <div class="history-filter" id="history-filter" role="group" aria-label="Show">
+          <button class="history-filter-btn active" data-filter="all">All</button>
+          <button class="history-filter-btn" data-filter="favorites">★ Favorites</button>
+        </div>
       </div>
       <div class="history-list" id="history-list">
         <div class="empty-state">
@@ -322,8 +351,14 @@
         <div class="setting-group about-group">
           <label>About</label>
           <p class="setting-hint">AI Translator <span id="app-version"></span></p>
+          <label class="checkbox-row" id="auto-update-row" hidden>
+            <input type="checkbox" id="auto-update-checkbox">
+            <span>Download updates automatically <span class="setting-hint">— they install the next time the app restarts</span></span>
+          </label>
           <div class="model-row">
             <button class="secondary-btn" id="btn-check-updates">Check for updates</button>
+            <button class="secondary-btn" id="btn-download-update" hidden>Download update</button>
+            <button class="secondary-btn accent" id="btn-install-update" hidden>Restart &amp; install</button>
             <a href="#" id="link-repo" class="repo-link">GitHub repository</a>
           </div>
           <p class="update-status" id="update-status"></p>

@@ -32,13 +32,14 @@
 - 🌓 **Light, Dark & System Themes** — switch from the title bar or follow the OS theme
 - ⚡ **Instant, Streamed Translation** — use `Ctrl+Enter` or the "Translate" button; the result appears word by word as it is generated, and **Stop** cancels it
 - 📌 **Translate Selection** — copy text in any app and press `Ctrl+Shift+Y`: the translator pops up and translates it (on Linux the highlighted text is used directly, no copy needed)
+- 🖼️ **Translate Screenshots** — paste (`Ctrl+V`), drop or pick an image, or copy a screenshot and press `Ctrl+Shift+Y`: the model reads the text in it and translates it
 - 🔥 **Gemini, Claude & OpenRouter** — pick from the latest Gemini models (including Gemini 3.8 Flash), Anthropic's Claude models (Opus 5.5, Sonnet 5.5, Haiku 5.5), or plug in an OpenRouter key and choose from its whole catalogue
 - 🔄 **Quick Language Swap** — the swap button instantly switches languages and text
-- 📋 **Translation History** — automatically saves the last 100 translations
+- 📋 **Translation History** — the last 100 translations, with search, ★ favorites (kept forever) and export to CSV, JSON or Markdown
 - ⌨️ **Global Hotkey** — summon the translator from any application (default `Ctrl+Shift+T`)
 - 🎯 **Recent Language Pairs** — the quick-access row is built from the pairs you actually use
 - 🔒 **System Tray** — runs in the background and is always at your fingertips
-- 🔔 **Update Check** — see at a glance when a newer release is published
+- 🔔 **Automatic Updates** — new versions download in the background and install on the next restart
 
 ## 🖥️ Screenshots
 
@@ -49,6 +50,8 @@
 | <img src="assets/screenshot-dark.png" width="420" alt="Main interface in the dark theme"> | <img src="assets/screenshot-light.png" width="420" alt="Main interface in the light theme"> |
 | **Fix text mode** | **Settings** |
 | <img src="assets/screenshot-fix.png" width="420" alt="Fix text mode correcting spelling and grammar"> | <img src="assets/screenshot-settings.png" width="420" alt="Settings with theme, provider and model options"> |
+| **Text from a screenshot** | **History** |
+| <img src="assets/screenshot-image.png" width="420" alt="A Japanese notice pasted as an image and translated into English"> | <img src="assets/screenshot-history.png" width="420" alt="History with search, favorites and export"> |
 
 </div>
 
@@ -65,11 +68,17 @@ Download the latest version from [Releases](https://github.com/PabloSensei/ai-tr
 
 | Platform | Package |
 |----------|---------|
-| 🪟 **Windows** | `AI Translator Setup <version>.exe` |
-| 🍏 **macOS** | `AI Translator-<version>-arm64.dmg` |
-| 🐧 **Linux** | `AI Translator-<version>.AppImage` or `.deb` |
+| 🪟 **Windows** | `AI-Translator-Setup-<version>.exe` |
+| 🍏 **macOS** | `AI-Translator-<version>-arm64.dmg` |
+| 🐧 **Linux** | `AI-Translator-<version>-x86_64.AppImage` or `ai-translator_<version>_amd64.deb` |
 
 After downloading, install and launch — no Node.js or npm required.
+
+The builds are not code-signed, so the OS warns on the first launch:
+
+- **Windows** — SmartScreen shows *"Windows protected your PC"*: click **More info → Run anyway**.
+- **macOS** — right-click the app in *Applications* and choose **Open**, then **Open** again (or *System Settings → Privacy & Security → Open Anyway*). If macOS says the app *"is damaged"*, run `xattr -cr "/Applications/AI Translator.app"` once.
+- **Linux** — make the AppImage executable: `chmod +x AI-Translator-*.AppImage`.
 
 ### Build from Source
 
@@ -106,6 +115,11 @@ npm start
 3. Click **"Translate"** or press `Ctrl+Enter`
 
 The row under the language bar shows the language pairs you used most recently — click one to restore it.
+
+### Text from Images
+Paste a screenshot with `Ctrl+V`, drop an image file onto the input panel, or click the 🖼 button to pick one, then press **Translate**. The model reads the text in the image and translates it (or, in *Fix text* mode, corrects it). Copying a screenshot (`Win+Shift+S`, `Cmd+Ctrl+Shift+4`, `PrtSc`) and pressing the *Translate selection* hotkey does the same in one step.
+
+Works with Gemini and Claude models, and with OpenRouter models that accept images. Images are scaled down to 2000 px on the long side before sending; they are not stored in the history.
 
 ### Translate / Fix text
 The toggle above the language bar switches between the two modes:
@@ -149,21 +163,32 @@ Use the ☀️/🌙 button in the title bar to flip between light and dark, or p
 Either way the picker only lists models that reply with text — image, audio, video, music and embedding models are filtered out, even though the APIs report many of them as usable.
 
 ### Updates
-Settings → About → **Check for updates** compares your version against the latest GitHub release and links to the download page.
+Installed builds update themselves from GitHub Releases: a few seconds after start (and every 6 hours) the app checks for a new version, downloads it in the background and installs it the next time it restarts. When an update is ready you get a notification, a **Restart & install** button in Settings → About, and a **Restart to Install** item in the tray menu.
+
+Untick *Download updates automatically* to be asked first. Running from source (`npm start`) only checks whether a newer release exists and links to it.
+
+| Platform | Automatic updates |
+|----------|-------------------|
+| Windows (installer) | ✅ |
+| Linux AppImage | ✅ |
+| Linux `.deb` | ✅ (asks for your password to install) |
+| macOS | 🔔 notifies and links to the download — macOS only lets signed apps replace themselves |
 
 ### Global Hotkeys
 
 | Hotkey | Default | What it does |
 |--------|---------|--------------|
 | Show / hide | `Ctrl+Shift+T` | Toggles the translator window |
-| Translate selection | `Ctrl+Shift+Y` | Opens the translator with the copied text and translates it. On Linux it takes the highlighted text (PRIMARY selection) directly |
+| Translate selection | `Ctrl+Shift+Y` | Opens the translator with the copied text — or a copied screenshot — and translates it. On Linux it takes the highlighted text (PRIMARY selection) directly |
 
 Both are configurable in ⚙️ Settings: click the field and press the new combination. *Backspace* in the *Translate selection* field disables that hotkey. The tray menu has a **Translate Clipboard** item that does the same.
 
 ### History
-- All translations are saved automatically
+- Click 🕐 to view your history; the last 100 translations are kept
 - Click an entry to use it again
-- Click 🕐 to view your history
+- **Search** filters by words in the original or the translation
+- ★ marks a favorite: favorites are never pushed out by new translations, survive **Clear**, and have their own filter
+- **Export** saves the entries currently shown as CSV (opens in Excel / Google Sheets), JSON or Markdown
 
 ## 🛠️ Technologies
 
@@ -174,6 +199,7 @@ Both are configurable in ⚙️ Settings: click the field and press the new comb
 | [Anthropic Claude](https://platform.claude.com/) | Translation engine (official `@anthropic-ai/sdk`) |
 | [OpenRouter](https://openrouter.ai/) | Alternative model provider |
 | [electron-store](https://github.com/sindresorhus/electron-store) | Storing settings and history |
+| [electron-updater](https://www.electron.build/auto-update) | Automatic updates from GitHub Releases |
 | HTML/CSS/JS | Interface |
 
 ## 📁 Project Structure
@@ -184,6 +210,8 @@ ai-translator/
 ├── lib/
 │   ├── providers.js # Gemini, Anthropic and OpenRouter clients
 │   ├── prompt.js    # Prompt building and translation styles
+│   ├── history.js   # History trimming and export formats
+│   ├── updater.js   # Automatic update state machine (electron-updater)
 │   └── settings.js  # Validation of everything that crosses IPC
 ├── languages.js     # Language list shared by main and renderer
 ├── preload.js       # Preload script, bridge between main and renderer
@@ -214,6 +242,7 @@ Settings are stored locally via `electron-store`:
 | `selectionHotkey` | Translate selection hotkey (empty = disabled) | `Ctrl+Shift+Y` |
 | `windowBounds` | Window Size | `860×640` |
 | `recentPairs` | Recently used language pairs | `[]` |
+| `autoUpdate` | Download updates automatically | `true` |
 
 ## 🤝 Contributing
 

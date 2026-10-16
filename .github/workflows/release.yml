@@ -42,10 +42,19 @@ jobs:
       - name: Build
         run: ${{ matrix.build_cmd }}
 
+      # The latest*.yml files and .blockmap files are what electron-updater
+      # reads to find and download updates; the mac .zip is what it installs.
       - name: Upload artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.blockmap
+            dist/latest*.yml
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

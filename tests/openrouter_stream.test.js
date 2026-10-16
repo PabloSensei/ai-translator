@@ -41,3 +41,34 @@ test('parseOpenRouterChunk surfaces mid-stream errors', () => {
     /OpenRouter error: Provider returned error/
   );
 });
+
+const { getProvider } = require('../lib/providers');
+const realFetch = globalThis.fetch;
+test.afterEach(() => { globalThis.fetch = realFetch; });
+
+test('OpenRouter sends an attached image as a data URL part', async () => {
+  let body;
+  globalThis.fetch = async (url, init) => {
+    body = JSON.parse(init.body);
+    return new Response('data: {"choices":[{"delta":{"content":"Hallo"}}]}\n\ndata: [DONE]\n\n', { status: 200 });
+  };
+  const image = { mediaType: 'image/png', data: 'iVBORw0KGgo=' };
+  const text = await getProvider('openrouter').generate({ system: 's', user: 'Translate the text in this image.', image }, 'sk-or-test', 'anthropic/claude-opus-5.5');
+  assert.strictEqual(text, 'Hallo');
+  assert.deepStrictEqual(body.messages[1].content, [
+    { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } },
+    { type: 'text', text: 'Translate the text in this image.' }
+  ]);
+});
+
+test('OpenRouter explains when the model cannot read images', async () => {
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ error: { code: 404, message: 'No endpoints found that support image input' } }),
+    { status: 404 }
+  );
+  const image = { mediaType: 'image/png', data: 'iVBORw0KGgo=' };
+  await assert.rejects(
+    getProvider('openrouter').generate({ system: 's', user: 'u', image }, 'sk-or-test', 'meta-llama/llama-3.3-70b-instruct'),
+    /cannot read images/
+  );
+});

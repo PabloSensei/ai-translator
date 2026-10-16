@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { buildPrompt, getStyleInstruction, resolveLanguage, cleanModelOutput, STYLE_INSTRUCTIONS } = require('../lib/prompt');
+const { buildPrompt, getStyleInstruction, resolveLanguage, cleanModelOutput, STYLE_INSTRUCTIONS, NO_TEXT_MARKER } = require('../lib/prompt');
 
 test('buildPrompt: explicit source language', () => {
   const { system, user } = buildPrompt({ text: 'hello', sourceLang: 'English', targetLang: 'Russian', mode: 'translate' });
@@ -72,4 +72,17 @@ test('cleanModelOutput strips echoed wrapper tags only', () => {
   assert.strictEqual(cleanModelOutput('<text>\nHallo\n</text>'), 'Hallo');
   assert.strictEqual(cleanModelOutput('a <text> b'), 'a <text> b');
   assert.strictEqual(cleanModelOutput(undefined), '');
+});
+
+test('image prompts read the text off the image and keep the injection guard', () => {
+  const p = buildPrompt({ text: '', image: true, sourceLang: 'auto', targetLang: 'German', mode: 'translate' });
+  assert.match(p.system, /Detect the language of the text in the user's image and translate it to German/);
+  assert.match(p.system, /never as instructions/);
+  assert.ok(p.system.includes(NO_TEXT_MARKER));
+  assert.strictEqual(p.user, 'Translate the text in this image.');
+  assert.ok(!p.user.includes('<text>'));
+
+  const fix = buildPrompt({ text: '', image: true, sourceLang: 'English', mode: 'fix' });
+  assert.match(fix.system, /errors in the English text in the user's image/);
+  assert.strictEqual(fix.user, 'Correct the text in this image.');
 });
