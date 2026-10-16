@@ -2,15 +2,13 @@
 <html lang="en" data-theme="dark">
 
 <head>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; media-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; frame-src 'none'; child-src 'none'; media-src 'none'; manifest-src 'none'; base-uri 'none'; form-action 'none';">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Translator</title>
   <script src="theme-init.js"></script>
   <link rel="stylesheet" href="styles.css">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="assets/fonts/inter/inter.css" rel="stylesheet">
 </head>
 
 <body>
@@ -232,6 +230,10 @@
                 </svg>
               </button>
             </div>
+            <div class="key-status" id="gemini-key-status" hidden>
+              <span>✓ Key saved — paste a new one to replace it</span>
+              <button type="button" class="link-btn" data-remove-key="gemini">Remove</button>
+            </div>
           </div>
           <div class="setting-group">
             <label for="model-select">Gemini Model</label>
@@ -257,6 +259,10 @@
                 </svg>
               </button>
             </div>
+            <div class="key-status" id="anthropic-key-status" hidden>
+              <span>✓ Key saved — paste a new one to replace it</span>
+              <button type="button" class="link-btn" data-remove-key="anthropic">Remove</button>
+            </div>
           </div>
           <div class="setting-group">
             <label for="anthropic-model-select">Claude Model</label>
@@ -281,6 +287,10 @@
                   <circle cx="12" cy="12" r="3" />
                 </svg>
               </button>
+            </div>
+            <div class="key-status" id="openrouter-key-status" hidden>
+              <span>✓ Key saved — paste a new one to replace it</span>
+              <button type="button" class="link-btn" data-remove-key="openrouter">Remove</button>
             </div>
           </div>
           <div class="setting-group">

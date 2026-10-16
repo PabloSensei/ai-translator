@@ -1209,3 +1209,32 @@ body::after {
 .error-text {
     color: var(--error);
 }
+
+/* "Key saved" line under an API key field: the key itself never reaches the UI. */
+.key-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--success);
+}
+
+.key-status[hidden] {
+    display: none;
+}
+
+.link-btn {
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--error);
+    font-family: var(--font);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.link-btn:hover {
+    text-decoration: underline;
+}

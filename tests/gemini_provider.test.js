@@ -46,3 +46,43 @@ test('a missing key fails before any request', async () => {
   await assert.rejects(getProvider('gemini').generate(prompt, '', 'gemini-2.5-flash'), /API key is not set/);
   assert.strictEqual(called, false);
 });
+
+test('a blocked prompt is reported as a refusal', async () => {
+  globalThis.fetch = async () => new Response(
+    `data: ${JSON.stringify({ promptFeedback: { blockReason: 'PROHIBITED_CONTENT' } })}\r\n\r\n`,
+    { status: 200, headers: { 'content-type': 'text/event-stream' } }
+  );
+  await assert.rejects(getProvider('gemini').generate(prompt, 'AIza-test', 'gemini-2.5-flash'), /declined.*PROHIBITED_CONTENT/);
+});
+
+test('an answer cut off by the token limit is an error, not a partial result', async () => {
+  globalThis.fetch = async () => new Response(
+    `data: ${JSON.stringify({ candidates: [{ content: { role: 'model', parts: [{ text: 'Hallo' }] }, finishReason: 'MAX_TOKENS', index: 0 }] })}\r\n\r\n`,
+    { status: 200, headers: { 'content-type': 'text/event-stream' } }
+  );
+  await assert.rejects(getProvider('gemini').generate(prompt, 'AIza-test', 'gemini-2.5-flash'), /cut off/);
+});
+
+test('API errors are turned into readable messages', async () => {
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ error: { code: 400, message: 'API key not valid. Please pass a valid API key.', status: 'INVALID_ARGUMENT' } }),
+    { status: 400, headers: { 'content-type': 'application/json' } }
+  );
+  await assert.rejects(getProvider('gemini').generate(prompt, 'AIza-bad', 'gemini-2.5-flash'), /rejected the Gemini API key/);
+
+  globalThis.fetch = async () => new Response(
+    JSON.stringify({ error: { code: 500, message: 'Internal error encountered.', status: 'INTERNAL' } }),
+    { status: 500, headers: { 'content-type': 'application/json' } }
+  );
+  await assert.rejects(getProvider('gemini').generate(prompt, 'AIza-test', 'gemini-2.5-flash'), /^Error: Gemini error 500: Internal error encountered\.$/);
+});
+
+test('aborting the signal stops the request', async () => {
+  globalThis.fetch = (url, init) => new Promise((resolve, reject) => {
+    init.signal.addEventListener('abort', () => reject(init.signal.reason));
+  });
+  const controller = new AbortController();
+  const pending = getProvider('gemini').generate(prompt, 'AIza-test', 'gemini-2.5-flash', { signal: controller.signal });
+  setTimeout(() => controller.abort(), 10);
+  await assert.rejects(pending, (err) => err.name === 'AbortError');
+});

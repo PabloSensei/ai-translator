@@ -364,6 +364,14 @@ function getApiKey(provider) {
   return decryptApiKey(settingsStore.get(API_KEY_FIELDS[provider]));
 }
 
+// Keys never travel back to the renderer: it only learns which ones are
+// saved. A key that can no longer be decrypted counts as missing.
+function savedKeyFlags() {
+  const flags = {};
+  for (const provider of Object.keys(API_KEY_FIELDS)) flags[provider] = Boolean(getApiKey(provider));
+  return flags;
+}
+
 function getModelFor(provider) {
   if (provider === 'openrouter') return settingsStore.get('openrouterModel') || '';
   if (provider === 'anthropic') return settingsStore.get('anthropicModel') || DEFAULT_ANTHROPIC_MODEL;
@@ -451,9 +459,7 @@ function setupIPC() {
   ipcMain.handle('get-settings', () => {
     const theme = settingsStore.get('theme') || 'dark';
     return {
-      apiKey: getApiKey('gemini'),
-      openrouterApiKey: getApiKey('openrouter'),
-      anthropicApiKey: getApiKey('anthropic'),
+      savedKeys: savedKeyFlags(),
       provider: sanitizeProvider(settingsStore.get('provider')),
       hotkey: savedHotkeys().hotkey,
       selectionHotkey: savedHotkeys().selectionHotkey,
@@ -475,14 +481,10 @@ function setupIPC() {
     if (!settings || typeof settings !== 'object') return { success: false, error: 'Invalid settings.' };
 
     // An empty string is a deliberate "remove this key".
-    if (settings.apiKey !== undefined) {
-      settingsStore.set('apiKey', encryptApiKey(sanitizeString(settings.apiKey, 400)));
-    }
-    if (settings.openrouterApiKey !== undefined) {
-      settingsStore.set('openrouterApiKey', encryptApiKey(sanitizeString(settings.openrouterApiKey, 400)));
-    }
-    if (settings.anthropicApiKey !== undefined) {
-      settingsStore.set('anthropicApiKey', encryptApiKey(sanitizeString(settings.anthropicApiKey, 400)));
+    for (const field of Object.values(API_KEY_FIELDS)) {
+      if (settings[field] !== undefined) {
+        settingsStore.set(field, encryptApiKey(sanitizeString(settings[field], 400)));
+      }
     }
     if (settings.provider !== undefined) {
       settingsStore.set('provider', sanitizeProvider(settings.provider));
@@ -513,7 +515,11 @@ function setupIPC() {
       }
     }
 
-    const result = { success: true, resolvedTheme: resolveTheme(settingsStore.get('theme')) };
+    const result = {
+      success: true,
+      resolvedTheme: resolveTheme(settingsStore.get('theme')),
+      savedKeys: savedKeyFlags()
+    };
 
     const requested = {};
     for (const field of Object.keys(HOTKEYS)) {
