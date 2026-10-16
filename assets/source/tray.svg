@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Tray / small sizes: full bleed, one bold bubble, no fine detail. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d6ff5"/>
+      <stop offset="0.55" stop-color="#7c5cf2"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+    <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="300" y1="260" x2="720" y2="740">
+      <stop offset="0" stop-color="#5b5ef0"/>
+      <stop offset="1" stop-color="#9a4cf0"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <path d="M290 170 H734 A120 120 0 0 1 854 290 V650 A120 120 0 0 1 734 770 H520 L330 900 L360 770 H290 A120 120 0 0 1 170 650 V290 A120 120 0 0 1 290 170 Z" fill="#ffffff"/>
+  <g fill="none" stroke="url(#ink)" stroke-width="84" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M512 262 V300"/>
+    <path d="M318 360 H706"/>
+    <path d="M408 380 Q468 560 690 662"/>
+    <path d="M616 380 Q556 560 334 662"/>
+  </g>
+</svg>
