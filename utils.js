@@ -76,6 +76,31 @@ function matchesHistoryQuery(item, query) {
     return words.every(word => haystack.includes(word));
 }
 
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Escapes `text` and wraps every occurrence of the query words in <mark>.
+ * Matches are found in the original string rather than in a lowercased copy,
+ * whose positions can differ: "İ".toLowerCase() is two characters long.
+ */
+function highlightMatches(text, query) {
+    const source = String(text || '');
+    const words = String(query || '').split(/\s+/).filter(Boolean);
+    if (!words.length) return escapeHtml(source);
+
+    // Longest first, so a word wins over its own prefix at the same spot.
+    const pattern = new RegExp(words.sort((a, b) => b.length - a.length).map(escapeRegExp).join('|'), 'giu');
+    let html = '';
+    let last = 0;
+    for (const match of source.matchAll(pattern)) {
+        html += escapeHtml(source.slice(last, match.index)) + `<mark>${escapeHtml(match[0])}</mark>`;
+        last = match.index + match[0].length;
+    }
+    return html + escapeHtml(source.slice(last));
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { escapeHtml, keyEventToAccelerator, matchesHistoryQuery };
+    module.exports = { escapeHtml, keyEventToAccelerator, matchesHistoryQuery, highlightMatches };
 }

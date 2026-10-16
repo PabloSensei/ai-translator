@@ -311,6 +311,11 @@ function updateLangDisplay() {
     selectedTargetOpt = targetLangOptions.get(currentTargetLang);
     if (selectedTargetOpt) selectedTargetOpt.classList.add('selected');
 
+    // Whichever way the languages changed, the matching recent pair lights up.
+    recentLangsContainer.querySelectorAll('.recent-chip').forEach(chip => {
+        chip.classList.toggle('active', chip.dataset.source === currentSourceLang && chip.dataset.target === currentTargetLang);
+    });
+
     updateActionLabels();
 }
 
@@ -415,6 +420,9 @@ swapBtn.addEventListener('click', () => {
         return;
     }
 
+    // Whatever has streamed so far is swapped as it stands.
+    abandonRequest();
+
     // Animation
     swapBtn.classList.add('swapping');
     setTimeout(() => swapBtn.classList.remove('swapping'), 400);
@@ -477,15 +485,14 @@ function renderRecentPairs(pairs) {
         chip.title = `${src.name} → ${tgt.name}`;
         chip.textContent = `${src.code === 'auto' ? 'Auto' : src.code.toUpperCase()} → ${tgt.code.toUpperCase()}`;
 
-        if (pair.source === currentSourceLang && pair.target === currentTargetLang) {
-            chip.classList.add('active');
-        }
+        chip.dataset.source = pair.source;
+        chip.dataset.target = pair.target;
+        chip.classList.toggle('active', pair.source === currentSourceLang && pair.target === currentTargetLang);
 
         chip.addEventListener('click', () => {
             currentSourceLang = pair.source;
             currentTargetLang = pair.target;
             updateLangDisplay();
-            renderRecentPairs(pairs);
         });
         fragment.appendChild(chip);
     });
@@ -613,6 +620,28 @@ function stopTranslation() {
     window.api.cancelTranslation(activeRequestId);
 }
 
+// Returns the UI to idle once the request on screen is over.
+function finishRequestUi() {
+    activeRequestId = null;
+    streamNode = null;
+    targetText.classList.remove('streaming');
+    translateBtn.classList.remove('stoppable');
+    translateBtn.title = '';
+    loader.style.display = 'none';
+    // Restores the button label for whatever mode is active now.
+    updateActionLabels();
+}
+
+// For actions that replace what is on screen (Clear, a history entry, a new
+// image, Swap): the running request is cancelled and disowned at once, so
+// neither its remaining pieces nor its result can overwrite the new content.
+// stopTranslation() alone would keep it as the owner until it settles.
+function abandonRequest() {
+    if (activeRequestId === null) return;
+    window.api.cancelTranslation(activeRequestId);
+    finishRequestUi();
+}
+
 // Text node that streamed pieces are appended to; created on the first piece.
 let streamNode = null;
 
@@ -695,16 +724,7 @@ async function doTranslate() {
         showError(`Error: ${err.message}`);
         showToast(isFix ? 'Fixing error' : 'Translation error', 'error');
     } finally {
-        if (requestId === activeRequestId) {
-            activeRequestId = null;
-            streamNode = null;
-            targetText.classList.remove('streaming');
-            translateBtn.classList.remove('stoppable');
-            translateBtn.title = '';
-            loader.style.display = 'none';
-            // Restores the button label for whatever mode is active now.
-            updateActionLabels();
-        }
+        if (requestId === activeRequestId) finishRequestUi();
     }
 }
 
@@ -783,6 +803,7 @@ async function attachImage(blob) {
     $('#image-preview').src = attachedImage.url;
     imageAttachment.hidden = false;
     sourceText.hidden = true;
+    abandonRequest();
     resetTargetPlaceholder();
     imageAttachment.focus();
     return true;
@@ -829,6 +850,9 @@ document.addEventListener('paste', (e) => {
     const target = e.target;
     const inOtherField = target !== sourceText && target.closest && target.closest('input, textarea, [contenteditable]');
     if (inOtherField) return;
+    // Text wins, as with the Paste button and the hotkey: Office apps put a
+    // picture of the selection on the clipboard next to the text itself.
+    if (e.clipboardData && e.clipboardData.getData('text/plain').trim()) return;
     const file = imageFromClipboardData(e.clipboardData);
     if (!file) return;
     e.preventDefault();
@@ -883,6 +907,7 @@ function showError(message) {
 
 // ===== Text Actions =====
 $('#btn-clear').addEventListener('click', () => {
+    abandonRequest();
     if (attachedImage) removeImage();
     sourceText.value = '';
     resetTargetPlaceholder();
@@ -962,31 +987,6 @@ function visibleHistoryItems() {
         (historyFilter !== 'favorites' || item.favorite) && matchesHistoryQuery(item, query));
 }
 
-// Escapes `text` and wraps every occurrence of the query words in <mark>.
-function highlightMatches(text, query) {
-    const source = String(text || '');
-    const words = String(query || '').toLowerCase().split(/\s+/).filter(Boolean);
-    if (!words.length) return escapeHtml(source);
-
-    const lower = source.toLowerCase();
-    const marked = new Array(source.length).fill(false);
-    for (const word of words) {
-        for (let i = lower.indexOf(word); i !== -1; i = lower.indexOf(word, i + word.length)) {
-            marked.fill(true, i, i + word.length);
-        }
-    }
-    let html = '';
-    let start = 0;
-    for (let i = 1; i <= source.length; i++) {
-        if (i === source.length || marked[i] !== marked[start]) {
-            const chunk = escapeHtml(source.slice(start, i));
-            html += marked[start] ? `<mark>${chunk}</mark>` : chunk;
-            start = i;
-        }
-    }
-    return html;
-}
-
 function renderEmptyHistory(container, message) {
     container.innerHTML = `
       <div class="empty-state">
@@ -1056,6 +1056,7 @@ function renderHistory() {
         el.addEventListener('click', (e) => {
             if (e.target.closest('button')) return;
 
+            abandonRequest();
             if (attachedImage) removeImage();
             sourceText.value = item.sourceText || '';
             targetText.textContent = item.targetText;
@@ -1496,11 +1497,13 @@ $('#auto-update-checkbox').addEventListener('change', async (e) => {
 });
 
 $('#btn-download-update').addEventListener('click', async (e) => {
-    e.currentTarget.disabled = true;
+    // e.currentTarget is null once the handler has awaited.
+    const btn = e.currentTarget;
+    btn.disabled = true;
     try {
         renderUpdateStatus(await window.api.downloadUpdate());
     } finally {
-        e.currentTarget.disabled = false;
+        btn.disabled = false;
     }
 });
 
