@@ -103,7 +103,7 @@
 
         <div class="lang-selector" id="target-lang-selector">
           <button class="lang-btn" id="target-lang-btn">
-            <span class="lang-code" id="target-lang-label">Russian</span>
+            <span class="lang-code" id="target-lang-label">Русский</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -213,6 +213,7 @@
           <p class="setting-hint">Where translations are generated</p>
           <select id="provider-select" class="setting-select">
             <option value="gemini">Google Gemini</option>
+            <option value="anthropic">Anthropic Claude</option>
             <option value="openrouter">OpenRouter</option>
           </select>
         </div>
@@ -238,6 +239,31 @@
             <div class="model-row">
               <select id="model-select" class="setting-select"></select>
               <button class="secondary-btn" id="btn-refresh-gemini-models">Refresh</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anthropic provider settings -->
+        <div class="provider-section" id="provider-anthropic" hidden>
+          <div class="setting-group">
+            <label for="anthropic-key-input">Anthropic API Key</label>
+            <p class="setting-hint">Get an API key at <a href="#" id="link-anthropic">platform.claude.com</a></p>
+            <div class="input-wrapper">
+              <input type="password" id="anthropic-key-input" placeholder="sk-ant-...">
+              <button class="toggle-visibility" id="toggle-anthropic-key" title="Show / hide">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="setting-group">
+            <label for="anthropic-model-select">Claude Model</label>
+            <p class="setting-hint">Opus is the most accurate, Haiku the fastest and cheapest</p>
+            <div class="model-row">
+              <select id="anthropic-model-select" class="setting-select"></select>
+              <button class="secondary-btn" id="btn-refresh-anthropic-models">Refresh</button>
             </div>
           </div>
         </div>
@@ -290,6 +316,7 @@
     </div>
   </div>
 
+  <script src="languages.js"></script>
   <script src="utils.js"></script>
   <script src="renderer.js"></script>
 </body>

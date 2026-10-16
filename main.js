@@ -1,34 +1,42 @@
-const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme } = require('electron');
+const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog } = require('electron');
 const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+
+const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput } = require('./lib/prompt');
+const {
+  MAX_TEXT_LENGTH,
+  sanitizeString,
+  sanitizeProvider,
+  sanitizeBareModelId,
+  sanitizeOpenRouterModelId,
+  sanitizeCustomStyles,
+  mergeRecentPairs,
+  isNewerVersion,
+  looksEncrypted,
+  isAllowedExternalUrl
+} = require('./lib/settings');
+const {
+  GITHUB_REPO,
+  DEFAULT_GEMINI_MODELS,
+  DEFAULT_ANTHROPIC_MODEL,
+  DEFAULT_ANTHROPIC_MODELS,
+  getProvider
+} = require('./lib/providers');
 
 // electron-store — ESM-only module starting from v9, use dynamic import
 let Store;
 let settingsStore;
 let historyStore;
 
-const GITHUB_REPO = 'PabloSensei/ai-translator';
+const DEFAULT_HOTKEY = 'Ctrl+Shift+T';
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash';
+const MAX_HISTORY_ITEMS = 100;
 
-// Curated fallback list, used when the provider model list cannot be fetched.
-// "Refresh" in the settings replaces this with whatever the API actually offers.
-const DEFAULT_GEMINI_MODELS = [
-  { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
-  { id: 'gemini-3.7-flash', name: 'Gemini 3.7 Flash' },
-  { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash' },
-  { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash' },
-  { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite' },
-  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro Preview' },
-  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite' },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash Preview' },
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' }
-];
-
-// This app only ever asks a model for text. Anything that generates images,
-// audio, video or music, plus embedding/retrieval-only models, is filtered out
-// of the picker even when the API reports it as supporting generateContent.
-const NON_TEXT_MODEL_PATTERN = /embedding|image|imagen|audio|-tts|\btts\b|veo|lyria|live|aqa|learnlm/i;
+// Settings key holding each provider's API key.
+const API_KEY_FIELDS = {
+  gemini: 'apiKey',
+  openrouter: 'openrouterApiKey',
+  anthropic: 'anthropicApiKey'
+};
 
 // --- Security Helpers ---
 function encryptApiKey(text) {
@@ -42,62 +50,65 @@ function encryptApiKey(text) {
   }
 }
 
-function decryptApiKey(text) {
-  if (!text) return '';
-  if (!safeStorage.isEncryptionAvailable()) return text;
+function decryptApiKey(stored) {
+  if (!stored || typeof stored !== 'string') return '';
+  if (!looksEncrypted(stored)) return stored; // legacy plaintext key
+  if (!safeStorage.isEncryptionAvailable()) {
+    console.error('An encrypted API key is stored, but the OS keychain is not available.');
+    return '';
+  }
   try {
-    const buffer = Buffer.from(text, 'hex');
-    return safeStorage.decryptString(buffer);
+    return safeStorage.decryptString(Buffer.from(stored, 'hex'));
   } catch (e) {
-    return text;
+    // Never hand ciphertext to a provider as if it were the key itself.
+    console.error('Failed to decrypt a stored API key:', e.message);
+    return '';
   }
 }
 
 async function initStores() {
-  try {
-    const mod = await import('electron-store');
-    Store = mod.default;
+  const mod = await import('electron-store');
+  Store = mod.default;
 
-    settingsStore = new Store({
-      name: 'settings',
-      defaults: {
-        apiKey: '',
-        openrouterApiKey: '',
-        provider: 'gemini',
-        hotkey: 'Ctrl+Shift+T',
-        windowBounds: { width: 860, height: 640 },
-        // Filled in from actual usage — starts empty on a fresh install.
-        recentPairs: [],
-        model: 'gemini-2.5-flash',
-        openrouterModel: '',
-        theme: 'dark',
-        style: 'neutral',
-        customStyles: []
-      }
-    });
+  settingsStore = new Store({
+    name: 'settings',
+    // A hand-edited, broken settings file should reset rather than brick startup.
+    clearInvalidConfig: true,
+    defaults: {
+      apiKey: '',
+      openrouterApiKey: '',
+      anthropicApiKey: '',
+      provider: 'gemini',
+      hotkey: DEFAULT_HOTKEY,
+      windowBounds: { width: 860, height: 640 },
+      // Filled in from actual usage — starts empty on a fresh install.
+      recentPairs: [],
+      model: DEFAULT_GEMINI_MODEL,
+      openrouterModel: '',
+      anthropicModel: DEFAULT_ANTHROPIC_MODEL,
+      theme: 'dark',
+      style: 'neutral',
+      customStyles: []
+    }
+  });
 
-    historyStore = new Store({
-      name: 'history',
-      defaults: {
-        items: []
-      }
-    });
+  historyStore = new Store({
+    name: 'history',
+    clearInvalidConfig: true,
+    defaults: {
+      items: []
+    }
+  });
 
-    // Migrate legacy plaintext API keys
-    for (const key of ['apiKey', 'openrouterApiKey']) {
-      const currentKey = settingsStore.get(key);
-      if (currentKey && safeStorage.isEncryptionAvailable()) {
-        const decrypted = decryptApiKey(currentKey);
-        // If decrypted value equals the input, it means decryption failed (fallback) or wasn't needed,
-        // which implies it is currently stored as plaintext (or invalid).
-        if (decrypted === currentKey) {
-          console.log(`Migrating ${key} to encrypted storage...`);
-          settingsStore.set(key, encryptApiKey(currentKey));
-        }
+  // Migrate legacy plaintext API keys
+  if (safeStorage.isEncryptionAvailable()) {
+    for (const field of Object.values(API_KEY_FIELDS)) {
+      const current = settingsStore.get(field);
+      if (current && !looksEncrypted(current)) {
+        console.log(`Migrating ${field} to encrypted storage...`);
+        settingsStore.set(field, encryptApiKey(current));
       }
     }
-  } catch (err) {
-    console.error('Failed to initialize electron-store:', err);
   }
 }
 
@@ -113,12 +124,12 @@ function resolveTheme(theme) {
 
 // --- Window Creation ---
 function createWindow() {
-  const bounds = settingsStore.get('windowBounds');
+  const bounds = settingsStore.get('windowBounds') || {};
   const theme = resolveTheme(settingsStore.get('theme'));
 
   mainWindow = new BrowserWindow({
-    width: bounds.width,
-    height: bounds.height,
+    width: Number(bounds.width) || 860,
+    height: Number(bounds.height) || 640,
     minWidth: 640,
     minHeight: 480,
     frame: false,
@@ -154,9 +165,16 @@ function createWindow() {
     }
   });
 
+  // 'resize' fires continuously while dragging; writing the settings file on
+  // every event is needless disk churn, so persist once the drag settles.
+  let resizeTimer = null;
   mainWindow.on('resize', () => {
-    const { width, height } = mainWindow.getBounds();
-    settingsStore.set('windowBounds', { width, height });
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isMaximized()) return;
+      const { width, height } = mainWindow.getBounds();
+      settingsStore.set('windowBounds', { width, height });
+    }, 400);
   });
 }
 
@@ -215,226 +233,51 @@ function createTray() {
   tray.setContextMenu(contextMenu);
 
   tray.on('double-click', () => toggleWindow());
+  // On Windows a single click on a tray icon is the expected way to open an app.
+  if (process.platform === 'win32') {
+    tray.on('click', () => toggleWindow());
+  }
 }
 
+function showWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+// The hotkey should bring the window forward when it is minimised or behind
+// other windows, and only hide it when it is actually in front of the user.
 function toggleWindow() {
-  if (mainWindow.isVisible()) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()) {
     mainWindow.hide();
   } else {
-    mainWindow.show();
-    mainWindow.focus();
+    showWindow();
   }
 }
 
 // --- Global Hotkey ---
-function registerHotkey() {
-  const hotkey = settingsStore.get('hotkey') || 'Ctrl+Shift+T';
-
+// Registers the given accelerator, or the saved one. Returns false when the OS
+// refused it (invalid accelerator, or taken by another application).
+function registerHotkey(hotkey = settingsStore.get('hotkey') || DEFAULT_HOTKEY) {
   globalShortcut.unregisterAll();
-
   try {
-    const success = globalShortcut.register(hotkey, () => {
-      toggleWindow();
-    });
-
-    if (!success) {
-      console.error(`Failed to register hotkey: ${hotkey}`);
-    }
+    const success = globalShortcut.register(hotkey, () => toggleWindow());
+    if (!success) console.error(`Failed to register hotkey: ${hotkey}`);
+    return success;
   } catch (err) {
     console.error(`Error registering hotkey ${hotkey}:`, err.message);
-    // Optionally register a default hotkey or ignore
+    return false;
   }
-}
-
-// --- Prompt Building ---
-const STYLE_INSTRUCTIONS = {
-  neutral: '',
-  formal: 'Use a formal, professional, and business-appropriate tone. Prefer official vocabulary, polite constructions, and structured phrasing typical of formal documents or business correspondence.',
-  casual: 'Use a casual, conversational, and friendly tone. Prefer everyday vocabulary, natural speech patterns, colloquial expressions, and informal phrasing as if chatting with a friend.',
-  technical: 'Use precise technical language. Keep domain terminology, product names, code identifiers, and units exactly as they are, and prefer the established wording used in technical documentation.',
-  academic: 'Use an academic, scholarly register. Prefer precise terminology, impersonal constructions, and the measured phrasing typical of research papers.',
-  creative: 'Use an expressive, literary tone. Preserve imagery, rhythm, and figurative language, favouring a natural, vivid rendering over a literal one.',
-  concise: 'Be as concise as possible. Remove filler, keep only the essential meaning, and prefer short sentences.',
-  simple: 'Use simple, plain language that a non-native speaker can easily understand. Avoid jargon, idioms, and complex sentence structures.',
-  marketing: 'Use persuasive marketing copy: energetic, benefit-focused, and catchy, while keeping the original meaning.',
-  polite: 'Use an especially polite and diplomatic tone. Soften direct statements and prefer courteous, considerate phrasing.'
-};
-
-function getStyleInstruction(style, customStyles) {
-  // hasOwnProperty, not a plain lookup: a style id such as "toString" or
-  // "constructor" would otherwise resolve to an inherited Object.prototype
-  // member and get stringified into the prompt.
-  if (typeof style !== 'string') return '';
-  if (Object.prototype.hasOwnProperty.call(STYLE_INSTRUCTIONS, style)) {
-    return STYLE_INSTRUCTIONS[style];
-  }
-  const custom = (Array.isArray(customStyles) ? customStyles : []).find(s => s && s.id === style);
-  if (custom && typeof custom.instruction === 'string') return custom.instruction.trim();
-  return '';
-}
-
-function buildPrompt({ text, sourceLang, targetLang, mode, styleInstruction }) {
-  const styleSuffix = styleInstruction ? ` ${styleInstruction}` : '';
-  const tail = ' Return ONLY the resulting text, nothing else — no explanations, no quotes, no formatting.';
-  const isAuto = !sourceLang || sourceLang === 'auto';
-
-  if (mode === 'fix') {
-    const langPart = isAuto ? '' : ` ${sourceLang}`;
-    return `Correct any spelling, grammar, and punctuation errors in the following${langPart} text. Keep the original language.${styleSuffix}${tail}\n\nText:\n${text}`;
-  }
-
-  const from = isAuto
-    ? 'Detect the language of the following text and translate it'
-    : `Translate the following text from ${sourceLang}`;
-
-  return `${from} to ${targetLang}.${styleSuffix}${tail}\n\nText:\n${text}`;
-}
-
-// --- Providers ---
-let cachedGenAI = null;
-let cachedModel = null;
-let currentApiKey = null;
-let currentModelName = null;
-
-async function generateWithGemini(prompt, apiKey, modelName) {
-  if (!apiKey) {
-    throw new Error('Gemini API key is not set. Please enter it in the settings.');
-  }
-
-  // Optimize: reuse GoogleGenerativeAI and model instances
-  if (apiKey !== currentApiKey || !cachedGenAI) {
-    cachedGenAI = new GoogleGenerativeAI(apiKey);
-    currentApiKey = apiKey;
-    cachedModel = null; // Reset model if AI client changes
-  }
-
-  if (modelName !== currentModelName || !cachedModel) {
-    cachedModel = cachedGenAI.getGenerativeModel({ model: modelName });
-    currentModelName = modelName;
-  }
-
-  const result = await cachedModel.generateContent(prompt);
-  return result.response.text().trim();
-}
-
-async function generateWithOpenRouter(prompt, apiKey, modelName) {
-  if (!apiKey) {
-    throw new Error('OpenRouter API key is not set. Please enter it in the settings.');
-  }
-  if (!modelName) {
-    throw new Error('No OpenRouter model selected. Pick one in the settings.');
-  }
-
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': `https://github.com/${GITHUB_REPO}`,
-      'X-Title': 'AI Translator'
-    },
-    body: JSON.stringify({
-      model: modelName,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-
-  if (!res.ok) {
-    const body = await res.text().catch(() => '');
-    let detail = body;
-    try {
-      detail = JSON.parse(body)?.error?.message || body;
-    } catch (e) { /* keep the raw body */ }
-    throw new Error(`OpenRouter error ${res.status}: ${String(detail).slice(0, 300)}`);
-  }
-
-  const data = await res.json();
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string' || !content.trim()) {
-    throw new Error('OpenRouter returned an empty response.');
-  }
-  return content.trim();
-}
-
-async function fetchGeminiModels(apiKey) {
-  if (!apiKey) throw new Error('Enter and save a Gemini API key first.');
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=200`);
-  if (!res.ok) {
-    throw new Error(`Google API error ${res.status}`);
-  }
-  const data = await res.json();
-  const models = (data.models || [])
-    .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
-    .map(m => ({
-      id: String(m.name || '').replace(/^models\//, ''),
-      name: m.displayName || String(m.name || '').replace(/^models\//, '')
-    }))
-    // Image generators such as gemini-*-flash-image report generateContent too,
-    // so they have to be excluded by name as well.
-    .filter(m => m.id && !NON_TEXT_MODEL_PATTERN.test(m.id) && !NON_TEXT_MODEL_PATTERN.test(m.name));
-
-  if (!models.length) throw new Error('No usable models returned by the API.');
-  return models;
-}
-
-// OpenRouter describes each model's modalities. Keep the ones that answer with
-// text and drop anything that emits images (gemini-*-image, gpt-*-image, and the
-// auto-routers, which advertise image output because they may route to one).
-function openRouterReturnsText(model) {
-  const arch = model.architecture || {};
-
-  if (Array.isArray(arch.output_modalities) && arch.output_modalities.length) {
-    return arch.output_modalities.includes('text') && !arch.output_modalities.includes('image');
-  }
-
-  // Older shape: "text+image->text"
-  if (typeof arch.modality === 'string' && arch.modality.includes('->')) {
-    const outputs = arch.modality.split('->')[1].split('+');
-    return outputs.includes('text') && !outputs.includes('image');
-  }
-
-  // Unknown shape — keep it rather than hiding a usable model.
-  return true;
-}
-
-async function fetchOpenRouterModels(apiKey) {
-  const headers = apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {};
-  const res = await fetch('https://openrouter.ai/api/v1/models', { headers });
-  if (!res.ok) {
-    throw new Error(`OpenRouter error ${res.status}`);
-  }
-  const data = await res.json();
-  const models = (data.data || [])
-    .filter(openRouterReturnsText)
-    .map(m => ({ id: m.id, name: m.name || m.id }))
-    .filter(m => m.id);
-
-  if (!models.length) throw new Error('No models returned by OpenRouter.');
-  models.sort((a, b) => a.name.localeCompare(b.name));
-  return models;
 }
 
 // --- Update check ---
-function parseVersion(v) {
-  return String(v).replace(/^v/i, '').split(/[.-]/).map(n => parseInt(n, 10) || 0);
-}
-
-function isNewerVersion(remote, local) {
-  const a = parseVersion(remote);
-  const b = parseVersion(local);
-  for (let i = 0; i < Math.max(a.length, b.length); i++) {
-    const x = a[i] || 0;
-    const y = b[i] || 0;
-    if (x > y) return true;
-    if (x < y) return false;
-  }
-  return false;
-}
-
 async function checkForUpdates() {
   const currentVersion = app.getVersion();
   const res = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
-    headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'AI-Translator' }
+    headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'AI-Translator' },
+    signal: AbortSignal.timeout(15000)
   });
 
   if (res.status === 404) {
@@ -461,86 +304,67 @@ const ALLOWED_EXTERNAL_URLS = [
   'https://aistudio.google.com/',
   'https://openrouter.ai/keys',
   'https://openrouter.ai/models',
+  'https://platform.claude.com/settings/keys',
   `https://github.com/${GITHUB_REPO}`,
   `https://github.com/${GITHUB_REPO}/releases`,
   `https://github.com/${GITHUB_REPO}/releases/latest`
 ];
 
-function getApiKeys() {
-  return {
-    gemini: decryptApiKey(settingsStore.get('apiKey')),
-    openrouter: decryptApiKey(settingsStore.get('openrouterApiKey'))
-  };
+function getApiKey(provider) {
+  return decryptApiKey(settingsStore.get(API_KEY_FIELDS[provider]));
 }
 
-// --- Settings validation ---
-// Everything below arrives over IPC. Even though the renderer is our own code,
-// the settings file is user-editable on disk and is read back on every launch,
-// so values are normalised before they are stored or used.
-const MAX_STYLE_NAME = 40;
-const MAX_STYLE_INSTRUCTION = 2000;
-const MAX_CUSTOM_STYLES = 50;
-
-function sanitizeString(value, maxLength) {
-  if (typeof value !== 'string') return '';
-  return value.slice(0, maxLength).trim();
-}
-
-// A Gemini model id is interpolated into the request URL path ("models/<id>:
-// generateContent"), so it is kept to bare id characters — no slash or colon
-// that could reshape that path.
-function sanitizeGeminiModelId(value) {
-  const id = sanitizeString(value, 200);
-  return /^[A-Za-z0-9._-]+$/.test(id) ? id : '';
-}
-
-// An OpenRouter model id travels in the JSON body, not the URL, and legitimately
-// contains a vendor prefix and a variant suffix (e.g. "meta-llama/llama-3.3-70b-instruct:free").
-function sanitizeOpenRouterModelId(value) {
-  const id = sanitizeString(value, 200);
-  return /^[A-Za-z0-9._\/:-]+$/.test(id) ? id : '';
-}
-
-function sanitizeCustomStyles(styles) {
-  if (!Array.isArray(styles)) return [];
-  return styles
-    .filter(s => s && typeof s === 'object')
-    .map(s => ({
-      id: sanitizeString(s.id, 64),
-      name: sanitizeString(s.name, MAX_STYLE_NAME),
-      instruction: sanitizeString(s.instruction, MAX_STYLE_INSTRUCTION)
-    }))
-    // Reserved and prototype-ish ids are rejected outright.
-    .filter(s => s.id && s.name && s.instruction && s.id.startsWith('custom-'))
-    .slice(0, MAX_CUSTOM_STYLES);
+function getModelFor(provider) {
+  if (provider === 'openrouter') return settingsStore.get('openrouterModel') || '';
+  if (provider === 'anthropic') return settingsStore.get('anthropicModel') || DEFAULT_ANTHROPIC_MODEL;
+  return settingsStore.get('model') || DEFAULT_GEMINI_MODEL;
 }
 
 function setupIPC() {
   // Translation
-  ipcMain.handle('translate', async (event, { text, sourceLang, targetLang, style, mode }) => {
+  ipcMain.handle('translate', async (event, request) => {
     try {
-      const keys = getApiKeys();
-      const provider = settingsStore.get('provider') || 'gemini';
+      const { text, sourceLang, targetLang, style, mode } = request || {};
+      const isFix = mode === 'fix';
+
+      if (typeof text !== 'string' || !text.trim()) {
+        throw new Error('Nothing to translate.');
+      }
+      if (text.length > MAX_TEXT_LENGTH) {
+        throw new Error(`The text is too long (${text.length} characters). The limit is ${MAX_TEXT_LENGTH}.`);
+      }
+
+      const source = resolveLanguage(sourceLang, { allowAuto: true }) || resolveLanguage('auto', { allowAuto: true });
+      const target = resolveLanguage(targetLang);
+      if (!isFix && !target) throw new Error('Unknown target language.');
+
+      const provider = sanitizeProvider(settingsStore.get('provider'));
       const styleInstruction = getStyleInstruction(style, settingsStore.get('customStyles'));
-      const prompt = buildPrompt({ text, sourceLang, targetLang, mode, styleInstruction });
+      const prompt = buildPrompt({
+        text,
+        sourceLang: source.english,
+        targetLang: target ? target.english : '',
+        mode: isFix ? 'fix' : 'translate',
+        styleInstruction
+      });
 
-      const translated = provider === 'openrouter'
-        ? await generateWithOpenRouter(prompt, keys.openrouter, settingsStore.get('openrouterModel'))
-        : await generateWithGemini(prompt, keys.gemini, settingsStore.get('model') || 'gemini-2.5-flash');
+      const raw = await getProvider(provider).generate(prompt, getApiKey(provider), getModelFor(provider));
+      const translated = cleanModelOutput(raw);
+      if (!translated) throw new Error('The model returned an empty response.');
 
-      // Save to history
+      // Save to history. Languages are stored as codes; older entries hold
+      // display names and are still resolved by the renderer.
       const items = historyStore.get('items') || [];
       items.unshift({
         id: Date.now(),
         sourceText: text,
         targetText: translated,
-        sourceLang,
-        targetLang,
-        mode: mode || 'translate',
+        sourceLang: source.code,
+        targetLang: target ? target.code : '',
+        mode: isFix ? 'fix' : 'translate',
         timestamp: new Date().toISOString()
       });
-      // Max 100 entries
-      if (items.length > 100) items.length = 100;
+      if (items.length > MAX_HISTORY_ITEMS) items.length = MAX_HISTORY_ITEMS;
       historyStore.set('items', items);
 
       return { success: true, translated };
@@ -551,44 +375,54 @@ function setupIPC() {
 
   // Settings
   ipcMain.handle('get-settings', () => {
-    const keys = getApiKeys();
     const theme = settingsStore.get('theme') || 'dark';
     return {
-      apiKey: keys.gemini,
-      openrouterApiKey: keys.openrouter,
-      provider: settingsStore.get('provider') || 'gemini',
+      apiKey: getApiKey('gemini'),
+      openrouterApiKey: getApiKey('openrouter'),
+      anthropicApiKey: getApiKey('anthropic'),
+      provider: sanitizeProvider(settingsStore.get('provider')),
       hotkey: settingsStore.get('hotkey'),
       recentPairs: settingsStore.get('recentPairs') || [],
-      model: settingsStore.get('model') || 'gemini-2.5-flash',
-      openrouterModel: settingsStore.get('openrouterModel') || '',
+      model: getModelFor('gemini'),
+      openrouterModel: getModelFor('openrouter'),
+      anthropicModel: getModelFor('anthropic'),
       theme,
       resolvedTheme: resolveTheme(theme),
       style: settingsStore.get('style') || 'neutral',
-      customStyles: settingsStore.get('customStyles') || [],
+      customStyles: sanitizeCustomStyles(settingsStore.get('customStyles')),
       defaultGeminiModels: DEFAULT_GEMINI_MODELS,
+      defaultAnthropicModels: DEFAULT_ANTHROPIC_MODELS,
       version: app.getVersion()
     };
   });
 
   ipcMain.handle('save-settings', (event, settings) => {
-    if (!settings || typeof settings !== 'object') return { success: false };
+    if (!settings || typeof settings !== 'object') return { success: false, error: 'Invalid settings.' };
 
+    // An empty string is a deliberate "remove this key".
     if (settings.apiKey !== undefined) {
       settingsStore.set('apiKey', encryptApiKey(sanitizeString(settings.apiKey, 400)));
     }
     if (settings.openrouterApiKey !== undefined) {
       settingsStore.set('openrouterApiKey', encryptApiKey(sanitizeString(settings.openrouterApiKey, 400)));
     }
+    if (settings.anthropicApiKey !== undefined) {
+      settingsStore.set('anthropicApiKey', encryptApiKey(sanitizeString(settings.anthropicApiKey, 400)));
+    }
     if (settings.provider !== undefined) {
-      settingsStore.set('provider', settings.provider === 'openrouter' ? 'openrouter' : 'gemini');
+      settingsStore.set('provider', sanitizeProvider(settings.provider));
     }
     if (settings.model !== undefined) {
-      const model = sanitizeGeminiModelId(settings.model);
+      const model = sanitizeBareModelId(settings.model);
       if (model) settingsStore.set('model', model);
     }
     if (settings.openrouterModel !== undefined) {
       const model = sanitizeOpenRouterModelId(settings.openrouterModel);
       if (model) settingsStore.set('openrouterModel', model);
+    }
+    if (settings.anthropicModel !== undefined) {
+      const model = sanitizeBareModelId(settings.anthropicModel);
+      if (model) settingsStore.set('anthropicModel', model);
     }
     if (settings.style !== undefined) {
       settingsStore.set('style', sanitizeString(settings.style, 64) || 'neutral');
@@ -603,29 +437,38 @@ function setupIPC() {
         mainWindow.setBackgroundColor(THEME_BACKGROUNDS[resolveTheme(theme)]);
       }
     }
+
+    const result = { success: true, resolvedTheme: resolveTheme(settingsStore.get('theme')) };
+
     if (settings.hotkey !== undefined) {
       const hotkey = sanitizeString(settings.hotkey, 64);
-      if (hotkey) {
-        settingsStore.set('hotkey', hotkey);
-        registerHotkey();
+      const previous = settingsStore.get('hotkey') || DEFAULT_HOTKEY;
+      if (hotkey && hotkey !== previous) {
+        // Only keep a shortcut the OS actually accepted; otherwise the old
+        // one stays active and the user is told why.
+        if (registerHotkey(hotkey)) {
+          settingsStore.set('hotkey', hotkey);
+        } else {
+          registerHotkey(previous);
+          result.hotkeyError = `The shortcut ${hotkey} could not be registered — it may be invalid or used by another app. Keeping ${previous}.`;
+          result.hotkey = previous;
+        }
       }
     }
-    return { success: true, resolvedTheme: resolveTheme(settingsStore.get('theme')) };
+    return result;
   });
 
   // Models
-  ipcMain.handle('list-models', async (event, provider) => {
+  ipcMain.handle('list-models', async (event, providerName) => {
+    const provider = sanitizeProvider(providerName);
     try {
-      const keys = getApiKeys();
-      const models = provider === 'openrouter'
-        ? await fetchOpenRouterModels(keys.openrouter)
-        : await fetchGeminiModels(keys.gemini);
+      const models = await getProvider(provider).listModels(getApiKey(provider));
       return { success: true, models };
     } catch (err) {
       return {
         success: false,
         error: err.message,
-        models: provider === 'openrouter' ? [] : DEFAULT_GEMINI_MODELS
+        models: getProvider(provider).defaultModels
       };
     }
   });
@@ -661,7 +504,10 @@ function setupIPC() {
   });
 
   ipcMain.handle('add-recent-pair', (event, pair) => {
-    return { success: true, pairs: updateRecentPairs(pair) };
+    const existing = settingsStore.get('recentPairs') || [];
+    const updated = mergeRecentPairs(existing, pair);
+    if (updated !== existing) settingsStore.set('recentPairs', updated);
+    return { success: true, pairs: updated };
   });
 
   // Read synchronously by the preload script so the first paint already uses
@@ -671,8 +517,8 @@ function setupIPC() {
   });
 
   // Window management
-  ipcMain.on('window-minimize', () => mainWindow.minimize());
-  ipcMain.on('window-close', () => mainWindow.hide());
+  ipcMain.on('window-minimize', () => mainWindow && mainWindow.minimize());
+  ipcMain.on('window-close', () => mainWindow && mainWindow.hide());
 
   // Hotkey management
   ipcMain.on('unregister-hotkey', () => globalShortcut.unregisterAll());
@@ -680,58 +526,63 @@ function setupIPC() {
 
   // Opening links in browser
   ipcMain.on('open-external', async (event, url) => {
-    if (!url || typeof url !== 'string') return;
-    try {
-      const parsed = new URL(url);
-      if (['http:', 'https:'].includes(parsed.protocol)) {
-        if (ALLOWED_EXTERNAL_URLS.includes(url)) {
-          await shell.openExternal(url);
-        } else {
-          console.warn(`Blocked URL not in allowlist: ${url}`);
-        }
-      } else {
-        console.warn(`Blocked potential security risk (invalid protocol): ${url}`);
-      }
-    } catch (err) {
-      console.warn(`Invalid URL passed to open-external: ${url}`);
+    if (isAllowedExternalUrl(url, ALLOWED_EXTERNAL_URLS)) {
+      await shell.openExternal(url);
+    } else {
+      console.warn(`Blocked URL not in allowlist: ${url}`);
     }
   });
 }
 
-// Keeps the "recently used" row honest: newest pair first, no duplicates, max 6.
-function updateRecentPairs({ source, target } = {}) {
-  if (typeof source !== 'string' || typeof target !== 'string' || !source || !target) {
-    return settingsStore.get('recentPairs') || [];
-  }
-  const existing = settingsStore.get('recentPairs') || [];
-  const filtered = existing.filter(p => !(p.source === source && p.target === target));
-  const updated = [{ source, target }, ...filtered].slice(0, 6);
-  settingsStore.set('recentPairs', updated);
-  return updated;
-}
-
 // --- App lifecycle ---
-app.whenReady().then(async () => {
-  await initStores();
-  // IPC must be ready before the window loads: the preload script reads the
-  // initial theme synchronously.
-  setupIPC();
-  createWindow();
-  createTray();
-  registerHotkey();
-  watchSystemTheme();
-});
+// A second copy would add a second tray icon and fight over the global hotkey;
+// bring the running window forward instead.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => showWindow());
+
+  app.whenReady().then(async () => {
+    try {
+      await initStores();
+    } catch (err) {
+      console.error('Failed to initialize electron-store:', err);
+      dialog.showErrorBox('AI Translator', `Could not load the settings:\n${err.message}`);
+      app.isQuitting = true;
+      app.quit();
+      return;
+    }
+    // IPC must be ready before the window loads: the preload script reads the
+    // initial theme synchronously.
+    setupIPC();
+    createWindow();
+    createTray();
+    registerHotkey();
+    watchSystemTheme();
+  });
+}
 
 app.on('window-all-closed', () => {
   // Do not close the application
+});
+
+// Cmd+Q, the app menu, an OS shutdown or an installer update all go through
+// before-quit. Without this flag the 'close' handler would cancel them and
+// hide the window instead, so the app could only be quit from the tray.
+app.on('before-quit', () => {
+  app.isQuitting = true;
 });
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
 });
 
+// macOS: clicking the dock icon. The window is normally hidden, not destroyed.
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
+  if (!settingsStore) return;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    showWindow();
+  } else {
     createWindow();
   }
 });
