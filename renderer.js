@@ -76,8 +76,11 @@ const targetLangSelector = $('#target-lang-selector');
 async function init() {
     const settings = await window.api.getSettings();
 
-    applyTheme(settings.theme, settings.resolvedTheme);
+    applyTheme(settings.theme, settings.resolvedTheme, settings.seeThrough);
     $('#theme-select').value = settings.theme || 'dark';
+    glassNativeSupported = Boolean(settings.glassNativeSupported);
+    $('#glass-see-through-checkbox').checked = settings.glassSeeThrough !== false;
+    updateGlassOptions();
 
     renderKeyStatus(settings.savedKeys);
 
@@ -120,31 +123,49 @@ async function init() {
     loadHistory();
 
     window.api.onSystemThemeChanged((resolved) => {
-        if (currentTheme === 'system') applyTheme('system', resolved);
+        if (currentTheme === 'system') applyTheme('system', resolved, false);
     });
 }
 
 // ===== Theme =====
-function applyTheme(theme, resolved) {
+// Whether the OS can blur the desktop behind the window (macOS, Windows 11).
+let glassNativeSupported = false;
+
+// `seeThrough`: the glass theme is drawn over the system blur, so the page
+// leaves out its own backdrop.
+function applyTheme(theme, resolved, seeThrough = false) {
     currentTheme = theme || 'dark';
-    const effective = resolved || (theme === 'light' ? 'light' : 'dark');
+    const effective = resolved || (['light', 'glass'].includes(theme) ? theme : 'dark');
     document.documentElement.setAttribute('data-theme', effective);
+    document.documentElement.toggleAttribute('data-see-through', Boolean(seeThrough) && effective === 'glass');
     document.documentElement.dataset.themeSetting = currentTheme;
+}
+
+function updateGlassOptions() {
+    $('#glass-options').hidden = !(glassNativeSupported && $('#theme-select').value === 'glass');
 }
 
 async function setTheme(theme) {
     const result = await window.api.saveSettings({ theme });
-    applyTheme(theme, result.resolvedTheme);
+    applyTheme(theme, result.resolvedTheme, result.seeThrough);
     $('#theme-select').value = theme;
+    updateGlassOptions();
 }
 
+// The titlebar button cycles dark → light → glass, starting from whatever
+// is on screen now (so "system" moves on from the theme it resolved to).
+const NEXT_THEME = { dark: 'light', light: 'glass', glass: 'dark' };
 $('#btn-theme').addEventListener('click', () => {
-    // Direct toggle: whatever is on screen now, flip it to the other one.
     const effective = document.documentElement.getAttribute('data-theme');
-    setTheme(effective === 'dark' ? 'light' : 'dark');
+    setTheme(NEXT_THEME[effective] || 'dark');
 });
 
 $('#theme-select').addEventListener('change', (e) => setTheme(e.target.value));
+
+$('#glass-see-through-checkbox').addEventListener('change', async (e) => {
+    const result = await window.api.saveSettings({ glassSeeThrough: e.target.checked });
+    applyTheme(currentTheme, result.resolvedTheme, result.seeThrough);
+});
 
 // ===== Dropdown Construction =====
 function buildDropdown(container, type) {

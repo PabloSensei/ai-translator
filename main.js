@@ -1,5 +1,6 @@
 const { app, safeStorage, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, shell, nativeTheme, dialog, clipboard, ClipboardItem, systemPreferences } = require('electron');
 const path = require('path');
+const os = require('os');
 const fs = require('fs');
 
 const { resolveLanguage, getStyleInstruction, buildPrompt, cleanModelOutput, NO_TEXT_MARKER } = require('./lib/prompt');
@@ -99,6 +100,8 @@ async function initStores() {
       theme: 'dark',
       style: 'neutral',
       customStyles: [],
+      // Glass theme: let the desktop show through (where the OS can blur it).
+      glassSeeThrough: true,
       // Download new versions in the background; they install on the next quit.
       autoUpdate: true
     }
@@ -127,11 +130,44 @@ async function initStores() {
 let mainWindow;
 let tray;
 
-const THEME_BACKGROUNDS = { dark: '#0f0f1a', light: '#f5f6fb' };
+const THEMES = ['dark', 'light', 'system', 'glass'];
+// Window colour behind the page: what shows before the first paint and
+// while resizing. Glass without native blur paints its own backdrop.
+const THEME_BACKGROUNDS = { dark: '#0f0f1a', light: '#f5f6fb', glass: '#1a1035' };
 
 function resolveTheme(theme) {
   if (theme === 'system') return nativeTheme.shouldUseDarkColors ? 'dark' : 'light';
-  return theme === 'light' ? 'light' : 'dark';
+  return theme === 'light' || theme === 'glass' ? theme : 'dark';
+}
+
+// Where the OS can blur what is behind a window: macOS vibrancy, and the
+// Acrylic material of Windows 11 22H2 (build 22621) and later. Elsewhere the
+// glass theme draws its own backdrop inside the window.
+const NATIVE_GLASS = process.platform === 'darwin' ||
+  (process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22621);
+
+// True when the window is currently see-through.
+function glassSeeThrough() {
+  return NATIVE_GLASS &&
+    resolveTheme(settingsStore.get('theme')) === 'glass' &&
+    settingsStore.get('glassSeeThrough') !== false;
+}
+
+// Applies the theme to the window itself: its background colour, and the
+// system blur material for the see-through glass theme.
+function applyWindowLook() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const seeThrough = glassSeeThrough();
+  try {
+    if (process.platform === 'darwin') {
+      mainWindow.setVibrancy(seeThrough ? 'under-window' : null);
+    } else if (process.platform === 'win32' && NATIVE_GLASS) {
+      mainWindow.setBackgroundMaterial(seeThrough ? 'acrylic' : 'none');
+    }
+  } catch (err) {
+    console.error('Could not change the window material:', err.message);
+  }
+  mainWindow.setBackgroundColor(seeThrough ? '#00000000' : THEME_BACKGROUNDS[resolveTheme(settingsStore.get('theme'))]);
 }
 
 // --- Window Creation ---
@@ -146,7 +182,7 @@ function createWindow() {
     minHeight: 480,
     frame: false,
     transparent: false,
-    backgroundColor: THEME_BACKGROUNDS[theme],
+    backgroundColor: glassSeeThrough() ? '#00000000' : THEME_BACKGROUNDS[theme],
     show: false,
     skipTaskbar: false,
     webPreferences: {
@@ -163,6 +199,8 @@ function createWindow() {
   });
 
   lockDownNavigation(mainWindow.webContents);
+  // Before the first paint, so a see-through glass window opens blurred.
+  applyWindowLook();
   mainWindow.loadFile('index.html');
 
   mainWindow.once('ready-to-show', () => {
@@ -223,7 +261,7 @@ function watchSystemTheme() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
     if (settingsStore.get('theme') !== 'system') return;
     const resolved = resolveTheme('system');
-    mainWindow.setBackgroundColor(THEME_BACKGROUNDS[resolved]);
+    applyWindowLook();
     mainWindow.webContents.send('system-theme-changed', resolved);
   });
 }
@@ -667,6 +705,9 @@ function setupIPC() {
       anthropicModel: getModelFor('anthropic'),
       theme,
       resolvedTheme: resolveTheme(theme),
+      glassSeeThrough: settingsStore.get('glassSeeThrough') !== false,
+      glassNativeSupported: NATIVE_GLASS,
+      seeThrough: glassSeeThrough(),
       style: settingsStore.get('style') || 'neutral',
       customStyles: sanitizeCustomStyles(settingsStore.get('customStyles')),
       defaultGeminiModels: DEFAULT_GEMINI_MODELS,
@@ -713,16 +754,17 @@ function setupIPC() {
       if (updater) updater.setAutoDownload(Boolean(settings.autoUpdate));
     }
     if (settings.theme !== undefined) {
-      const theme = ['dark', 'light', 'system'].includes(settings.theme) ? settings.theme : 'dark';
-      settingsStore.set('theme', theme);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.setBackgroundColor(THEME_BACKGROUNDS[resolveTheme(theme)]);
-      }
+      settingsStore.set('theme', THEMES.includes(settings.theme) ? settings.theme : 'dark');
     }
+    if (settings.glassSeeThrough !== undefined) {
+      settingsStore.set('glassSeeThrough', Boolean(settings.glassSeeThrough));
+    }
+    if (settings.theme !== undefined || settings.glassSeeThrough !== undefined) applyWindowLook();
 
     const result = {
       success: true,
       resolvedTheme: resolveTheme(settingsStore.get('theme')),
+      seeThrough: glassSeeThrough(),
       savedKeys: savedKeyFlags()
     };
 
@@ -873,7 +915,7 @@ function setupIPC() {
   // Read synchronously by the preload script so the first paint already uses
   // the right theme — otherwise light-theme users see a dark flash on startup.
   ipcMain.on('get-initial-theme', (event) => {
-    event.returnValue = resolveTheme(settingsStore.get('theme'));
+    event.returnValue = { theme: resolveTheme(settingsStore.get('theme')), seeThrough: glassSeeThrough() };
   });
 
   // Window management

@@ -29,7 +29,7 @@
 - 🔎 **Automatic Language Detection** — leave the source set to *Detect language* and the model works it out
 - 🛠️ **Translate / Fix text Modes** — one toggle switches between translating and correcting spelling and grammar in place
 - 🎨 **10 Translation Styles + Custom** — formal, neutral, casual, technical, academic, creative, concise, simple, marketing and polite, plus your own saved styles
-- 🌓 **Light, Dark & System Themes** — switch from the title bar or follow the OS theme
+- 🌓 **Light, Dark, Glass & System Themes** — including a translucent iOS-style glass theme that blurs the desktop behind the window
 - ⚡ **Instant, Streamed Translation** — use `Ctrl+Enter` or the "Translate" button; the result appears word by word as it is generated, and **Stop** cancels it
 - 📌 **Translate Selection** — select text in any app and press `Ctrl+Shift+Y`: the translator pops up and translates it
 - 🖼️ **Translate Screenshots** — paste (`Ctrl+V`), drop or pick an image, or copy a screenshot and press `Ctrl+Shift+Y`: the model reads the text in it and translates it
@@ -50,6 +50,8 @@
 | <img src="assets/screenshot-dark.png" width="420" alt="Main interface in the dark theme"> | <img src="assets/screenshot-light.png" width="420" alt="Main interface in the light theme"> |
 | **Fix text mode** | **Settings** |
 | <img src="assets/screenshot-fix.png" width="420" alt="Fix text mode correcting spelling and grammar"> | <img src="assets/screenshot-settings.png" width="420" alt="Settings with theme, provider and model options"> |
+| **Glass theme** | **Glass: history** |
+| <img src="assets/screenshot-glass.png" width="420" alt="The translucent glass theme"> | <img src="assets/screenshot-glass-history.png" width="420" alt="History in the glass theme"> |
 | **Text from a screenshot** | **History** |
 | <img src="assets/screenshot-image.png" width="420" alt="A Japanese notice pasted as an image and translated into English"> | <img src="assets/screenshot-history.png" width="420" alt="History with search, favorites and export"> |
 
@@ -150,7 +152,11 @@ Switch style with one click:
 Press **+ Custom** to define your own: give it a name and an instruction (for example *"Use legal contract wording"*). Custom styles are saved and appear alongside the built-in ones; the `×` on a custom chip deletes it.
 
 ### Themes
-Use the ☀️/🌙 button in the title bar to flip between light and dark, or pick **System** under Settings → Appearance to follow the OS theme.
+The button in the title bar cycles **Dark → Light → Glass**; Settings → Appearance also offers **System**, which follows the OS theme.
+
+**Glass** is a translucent, frosted theme in the spirit of iOS:
+- **macOS** and **Windows 11** — the window is see-through: the desktop shows behind it, blurred by the system (vibrancy on macOS, Acrylic on Windows). Untick *See-through* under Appearance to keep a backdrop inside the window instead.
+- **Linux** and **Windows 10** — the OS cannot blur behind a window, so the window paints its own colourful backdrop under the frosted panels.
 
 ### AI Providers
 
@@ -241,7 +247,8 @@ Settings are stored locally via `electron-store`:
 | `anthropicApiKey` | Anthropic API key (encrypted at rest; never sent back to the window) | — |
 | `openrouterApiKey` | OpenRouter API key (encrypted at rest; never sent back to the window) | — |
 | `model` / `anthropicModel` / `openrouterModel` | Selected model per provider | `gemini-2.5-flash` / `claude-opus-5-5` / — |
-| `theme` | `dark`, `light`, or `system` | `dark` |
+| `theme` | `dark`, `light`, `glass` or `system` | `dark` |
+| `glassSeeThrough` | Glass theme: blur the desktop behind the window (macOS, Windows 11) | `true` |
 | `style` | Selected translation style | `neutral` |
 | `customStyles` | Your own saved styles | `[]` |
 | `hotkey` | Show / hide hotkey | `Ctrl+Shift+T` |

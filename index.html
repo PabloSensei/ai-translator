@@ -27,6 +27,9 @@
         <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
         </svg>
+        <svg class="icon-glass" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+          <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+        </svg>
       </button>
       <button class="titlebar-btn" id="btn-settings" title="Settings">
         <!-- A gear: the old circle-with-rays read as a second theme (sun) button. -->
@@ -228,12 +231,17 @@
       <div class="settings-form">
         <div class="setting-group">
           <label for="theme-select">Appearance</label>
-          <p class="setting-hint">Light, dark, or follow the system theme</p>
+          <p class="setting-hint">Light, dark, translucent glass, or follow the system theme</p>
           <select id="theme-select" class="setting-select">
             <option value="dark">Dark</option>
             <option value="light">Light</option>
+            <option value="glass">Glass</option>
             <option value="system">System</option>
           </select>
+          <label class="checkbox-row" id="glass-options" hidden>
+            <input type="checkbox" id="glass-see-through-checkbox">
+            <span>See-through <span class="setting-hint">— blur the desktop behind the window</span></span>
+          </label>
         </div>
 
         <div class="setting-group">

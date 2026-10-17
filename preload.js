@@ -2,14 +2,18 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Resolved before the page renders so the first paint uses the saved theme.
 let initialTheme = 'dark';
+let initialSeeThrough = false;
 try {
-    initialTheme = ipcRenderer.sendSync('get-initial-theme') || 'dark';
+    const initial = ipcRenderer.sendSync('get-initial-theme') || {};
+    initialTheme = initial.theme || 'dark';
+    initialSeeThrough = Boolean(initial.seeThrough);
 } catch (e) {
     console.error('Failed to read the initial theme:', e);
 }
 
 contextBridge.exposeInMainWorld('api', {
     initialTheme,
+    initialSeeThrough,
     platform: process.platform,
 
     translate: (data) => ipcRenderer.invoke('translate', data),

@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.0
+
+### New
+- **Glass theme** — a translucent, frosted look in the spirit of iOS. On macOS and Windows 11 the window is see-through and the system blurs the desktop behind it (*See-through* under Settings → Appearance turns that off); on Linux and Windows 10 the window paints its own colourful backdrop under the glass. The title-bar button now cycles Dark → Light → Glass.
+
+### Changed
+- Release and CI workflows use the current GitHub Actions (checkout v7, setup-node v7, upload-artifact v7, download-artifact v8, action-gh-release v3), which run on Node 24 natively.
+
 ## 2.0.1
 
 ### Fixed
