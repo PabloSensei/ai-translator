@@ -67,6 +67,36 @@
     --danger-border: rgba(239, 68, 68, 0.25);
 }
 
+:root[data-theme="glass"] {
+    --bg-primary: #1a1035;
+    --bg-secondary: rgba(36, 28, 78, 0.62);
+    --bg-tertiary: rgba(255, 255, 255, 0.06);
+    --bg-card: rgba(255, 255, 255, 0.09);
+    --bg-card-hover: rgba(255, 255, 255, 0.14);
+    --bg-input: rgba(255, 255, 255, 0.08);
+    --bg-hover: rgba(255, 255, 255, 0.12);
+    --border: rgba(255, 255, 255, 0.18);
+    --border-focus: rgba(255, 255, 255, 0.5);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.78);
+    --text-hint: rgba(255, 255, 255, 0.52);
+    --accent-glow: rgba(165, 180, 252, 0.35);
+    --purple-glow: rgba(216, 180, 254, 0.3);
+    --shadow: 0 8px 32px rgba(12, 6, 40, 0.35);
+    --scrollbar: rgba(255, 255, 255, 0.25);
+    --scrollbar-hover: rgba(255, 255, 255, 0.4);
+    --glow-opacity-a: 0;
+    --glow-opacity-b: 0;
+    --danger-bg: rgba(248, 113, 113, 0.14);
+    --danger-bg-hover: rgba(248, 113, 113, 0.26);
+    --danger-border: rgba(248, 113, 113, 0.35);
+    --error: #fca5a5;
+    /* Frosted surfaces: a strong blur of what is behind, a little extra
+       colour, and a thin specular edge along the top like iOS glass. */
+    --glass-blur: blur(28px) saturate(170%);
+    --glass-edge: inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -183,12 +213,14 @@ a:hover {
     color: var(--error);
 }
 
-/* The theme button shows the theme it will switch TO: a sun while dark, a moon while light. */
-:root[data-theme="dark"] .icon-moon {
-    display: none;
-}
-
-:root[data-theme="light"] .icon-sun {
+/* The theme button shows the theme it will switch TO: dark → light (sun),
+   light → glass (drop), glass → dark (moon). */
+:root[data-theme="dark"] .icon-moon,
+:root[data-theme="dark"] .icon-glass,
+:root[data-theme="light"] .icon-sun,
+:root[data-theme="light"] .icon-moon,
+:root[data-theme="glass"] .icon-sun,
+:root[data-theme="glass"] .icon-glass {
     display: none;
 }
 
@@ -1456,4 +1488,90 @@ body::after {
 .secondary-btn.accent:hover:not(:disabled) {
     background: var(--accent);
     filter: brightness(1.1);
+}
+
+
+/* ===== Glass theme ===== */
+/* Without the system blur (Linux, Windows 10, or "See-through" off) the
+   window paints its own colourful backdrop for the glass to sit on. */
+:root[data-theme="glass"] body {
+    background:
+        radial-gradient(circle at 12% 18%, rgba(139, 92, 246, 0.95) 0, transparent 42%),
+        radial-gradient(circle at 88% 12%, rgba(59, 130, 246, 0.85) 0, transparent 38%),
+        radial-gradient(circle at 78% 88%, rgba(236, 72, 153, 0.8) 0, transparent 42%),
+        radial-gradient(circle at 18% 92%, rgba(6, 182, 212, 0.75) 0, transparent 38%),
+        linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%);
+}
+
+/* Over the system blur (macOS vibrancy, Windows 11 Acrylic) the desktop
+   shows through; a light tint keeps white text readable on any wallpaper. */
+:root[data-theme="glass"][data-see-through] body {
+    background: rgba(18, 12, 44, 0.32);
+}
+
+:root[data-theme="glass"] .titlebar {
+    background: rgba(255, 255, 255, 0.06);
+    border-bottom-color: rgba(255, 255, 255, 0.12);
+    backdrop-filter: var(--glass-blur);
+}
+
+:root[data-theme="glass"] :is(.mode-switch, .lang-btn, .recent-chip, .style-selector,
+    .custom-style-editor, .text-area-wrapper, .history-item, .provider-section) {
+    backdrop-filter: var(--glass-blur);
+    box-shadow: var(--glass-edge), var(--shadow);
+}
+
+/* Lists and pop-ups float over busy content: more frosting, less see-through. */
+:root[data-theme="glass"] :is(.lang-dropdown, .toast) {
+    background: rgba(30, 24, 70, 0.72);
+    backdrop-filter: blur(36px) saturate(180%);
+    box-shadow: var(--glass-edge), 0 16px 48px rgba(8, 4, 30, 0.5);
+}
+
+:root[data-theme="glass"] .lang-dropdown-search {
+    background: transparent;
+}
+
+:root[data-theme="glass"] .setting-group select option {
+    background: #2a2352;
+}
+
+:root[data-theme="glass"] .view-header h2 {
+    background: linear-gradient(135deg, #ffffff, #c7d2fe);
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+:root[data-theme="glass"] .text-area-wrapper:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: var(--glass-edge), 0 0 0 3px rgba(255, 255, 255, 0.14);
+}
+
+/* Indigo accent text disappears on the purple glass; use a light tint of it. */
+:root[data-theme="glass"] :is(a, .lang-option.selected, .recent-chip:hover, .recent-chip.active,
+    .style-btn-add, .history-item-langs, .drop-overlay) {
+    color: #c7d2fe;
+}
+
+:root[data-theme="glass"] .target-text.streaming::after {
+    color: #c7d2fe;
+}
+
+:root[data-theme="glass"] :is(.recent-chip:hover, .recent-chip.active, .drop-overlay) {
+    border-color: rgba(199, 210, 254, 0.75);
+}
+
+:root[data-theme="glass"] .recent-chip.active {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* The selected style as a brighter pill of glass rather than an indigo
+   gradient, which merges with the purple backdrop. */
+:root[data-theme="glass"] .style-btn.active {
+    background: rgba(255, 255, 255, 0.24);
+    box-shadow: var(--glass-edge), 0 2px 12px rgba(12, 6, 40, 0.25);
+}
+
+:root[data-theme="glass"] .key-status {
+    color: #86efac;
 }

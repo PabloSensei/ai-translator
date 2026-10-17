@@ -9,7 +9,6 @@ permissions:
   contents: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
   # The unit tests run on plain Node; the Electron binary is not needed.
   ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
 
@@ -17,9 +16,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
